@@ -17,3 +17,12 @@ export {
 export { processImage, type CropRect, type ProcessOptions, type ProcessedImage } from './image';
 export { CLIENT_HEADER, checkRequest } from './security';
 export { hashSource } from './mdx/hash';
+export {
+  createLibrary,
+  defaultPageUrl,
+  type Library,
+  type LibraryImage,
+  type LibraryPage,
+  type LibraryScan,
+  type LibraryUsage,
+} from './library';

@@ -1,4 +1,7 @@
+import type { LibraryScan } from '@mdx-media-manager/core';
 import type { SourceTag } from './dom';
+
+export type { LibraryImage, LibraryScan, LibraryUsage } from '@mdx-media-manager/core';
 
 export interface Crop {
   x: number;
@@ -66,6 +69,14 @@ export function createApi(basePath: string) {
     return data as T;
   }
 
+  function json<T>(path: string, body: object) {
+    return call<T>(path, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  }
+
   function upload<T>(path: string, file: File, meta: object) {
     const body = new FormData();
     body.set('file', file);
@@ -103,11 +114,46 @@ export function createApi(basePath: string) {
         ...options,
       }),
 
-    /** Images in the destination folder already named `name` (for a look-alike warning) */
-    similarNames: (tag: SourceTag, name: string, url?: string) =>
+    /**
+     * Images in the destination folder already named `name` (for a look-alike warning): the
+     * page's folder for a new image, or the image's own folder for a rename.
+     */
+    similarNames: (page: SourceTag | undefined, name: string, url?: string) =>
       call<{ matches: string[] }>(
-        `/images/names?${new URLSearchParams({ file: tag.file, name, ...(url ? { url } : {}) })}`,
+        `/images/names?${new URLSearchParams({ name, ...(page ? { file: page.file } : {}), ...(url ? { url } : {}) })}`,
       ).then((res) => res.matches),
+
+    insertExisting: (tag: SourceTag, position: 'before' | 'after', url: string, alt: string) =>
+      json<EditResponse>('/images/insert-existing', {
+        file: tag.file,
+        hash: tag.hash,
+        target: target(tag),
+        position,
+        alt,
+        url,
+      }),
+
+    library: () => call<LibraryScan>('/library'),
+
+    renameEverywhere: (url: string, name: string) =>
+      json<{
+        url: string;
+        updated: string[];
+        failed: { file: string; message: string }[];
+        removed?: string;
+        kept: string[];
+      }>('/library/rename', { url, name }),
+
+    setAltEverywhere: (url: string, alt: string) =>
+      json<{ updated: string[]; failed: { file: string; message: string }[] }>('/library/alt', {
+        url,
+        alt,
+      }),
+
+    deleteUnused: (urls: string[]) =>
+      json<{ deleted: string[]; skipped: { url: string; reason: string }[] }>('/library/delete', {
+        urls,
+      }),
 
     /** Rename and/or change alt text without touching the image data */
     update: (tag: SourceTag, url: string, options: { alt?: string; name?: string }) =>

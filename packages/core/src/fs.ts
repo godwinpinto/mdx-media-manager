@@ -75,9 +75,14 @@ const skippedDirs = new Set([
   'build',
   '.output',
   '.vercel',
+  '.tanstack',
+  '.nitro',
+  '.cache',
+  'coverage',
 ]);
 
-async function* walk(dir: string, skip: string): AsyncGenerator<string> {
+/** Text files of the project (content, code, config), skipping dependencies, build output and `skip`. */
+export async function* projectFiles(dir: string, skip: string): AsyncGenerator<string> {
   let entries;
   try {
     entries = await fs.readdir(dir, { withFileTypes: true });
@@ -87,7 +92,7 @@ async function* walk(dir: string, skip: string): AsyncGenerator<string> {
   for (const entry of entries) {
     const full = path.join(dir, entry.name);
     if (entry.isDirectory()) {
-      if (!skippedDirs.has(entry.name) && full !== skip) yield* walk(full, skip);
+      if (!skippedDirs.has(entry.name) && full !== skip) yield* projectFiles(full, skip);
     } else if (entry.isFile() && scannedExtensions.test(entry.name)) {
       yield full;
     }
@@ -99,7 +104,7 @@ async function* walk(dir: string, skip: string): AsyncGenerator<string> {
  * Deliberately a plain text search: a false positive only keeps a file around.
  */
 export async function isReferenced(root: string, publicDir: string, url: string): Promise<boolean> {
-  for await (const file of walk(root, publicDir)) {
+  for await (const file of projectFiles(root, publicDir)) {
     const text = await fs.readFile(file, 'utf8').catch(() => '');
     if (text.includes(url)) return true;
   }

@@ -8,7 +8,8 @@ import {
 } from 'react';
 import ReactCrop, { centerCrop, makeAspectCrop, type PercentCrop } from 'react-image-crop';
 import { checkName, slugify } from '@mdx-media-manager/core/slug';
-import type { Crop, Output, Status } from './api';
+import type { Api, Crop, LibraryImage, Output, Status } from './api';
+import { commonAlt, LibraryPicker } from './library';
 
 export interface DialogResult {
   /** Image to process. In edit mode it is absent when only the name/alt text changed. */
@@ -19,15 +20,19 @@ export interface DialogResult {
   name?: string;
   crop?: Crop;
   output: Output;
+  /** Insert an image already in the library (by URL) instead of uploading */
+  existing?: string;
 }
 
 export interface ImageDialogProps {
   mode: 'insert' | 'edit';
   defaults: Status['image'];
   /** The image being edited: its URL as written in source, and its alt text */
-  current?: { url: string; alt: string };
+  current?: { url: string; alt: string; missing?: boolean };
   /** Existing images in the destination folder that already use a name */
   findSimilar?: (name: string) => Promise<string[]>;
+  /** Enables the "Library" tab when inserting */
+  api?: Api;
   busy: boolean;
   error?: string;
   onSubmit(result: DialogResult): void;
@@ -92,6 +97,7 @@ export function ImageDialog({
   defaults,
   current,
   findSimilar,
+  api,
   busy,
   error,
   onSubmit,
@@ -102,6 +108,8 @@ export function ImageDialog({
   const currentExtension = current ? extensionOfUrl(current.url) : '';
   const initialFormat = (current && outputFormats[currentExtension]) || defaults.format!;
 
+  const [source, setSource] = useState<'upload' | 'library'>('upload');
+  const [picked, setPicked] = useState<LibraryImage>();
   const [file, setFile] = useState<File>();
   /** Edit mode: the current image, loaded so it can be cropped or converted */
   const original = useRef<File>(undefined);
@@ -156,10 +164,13 @@ export function ImageDialog({
         setFile((existing) => existing ?? loaded);
       })
       .catch(() => {
-        if (!cancelled)
+        if (!cancelled) {
           setNotice(
-            'Could not load the current image. Drop or choose a new one, or just rename it.',
+            current?.missing
+              ? "This image's file is missing. Drop, paste or choose a replacement."
+              : 'Could not load the current image. Drop or choose a new one, or just rename it.',
           );
+        }
       })
       .finally(() => !cancelled && setLoading(false));
     return () => {
@@ -189,6 +200,7 @@ export function ImageDialog({
 
   function choose(next: File | undefined) {
     if (!next) return;
+    setSource('upload');
     if (!next.type.startsWith('image/')) {
       setNotice(`"${next.name}" is not an image.`);
       return;
@@ -287,15 +299,25 @@ export function ImageDialog({
   const nameChanged = finalName !== initialName;
   const outputExtension = imageChanged ? (format === 'jpeg' ? 'jpg' : format) : currentExtension;
 
-  const canSubmit =
-    !busy &&
-    !nameCheck.error &&
-    (mode === 'insert' ? !!file && !!alt.trim() : imageChanged || altChanged || nameChanged);
+  const fromLibrary = mode === 'insert' && source === 'library';
+
+  const canSubmit = fromLibrary
+    ? !busy && !!picked && !!alt.trim()
+    : !busy &&
+      !nameCheck.error &&
+      (mode === 'insert'
+        ? !!file && !!alt.trim()
+        : // A missing file can't be renamed, only replaced (or its alt text changed).
+          imageChanged || altChanged || (nameChanged && !current?.missing));
 
   function submit(e: FormEvent) {
     e.preventDefault();
     if (!canSubmit) return;
     const output = { format, quality, maxWidth };
+    if (fromLibrary) {
+      onSubmit({ existing: picked!.url, alt: alt.trim(), output });
+      return;
+    }
     if (mode === 'insert') {
       onSubmit({
         file,
@@ -386,7 +408,64 @@ export function ImageDialog({
           </button>
         </header>
 
-        {!file && loading ? (
+        {mode === 'insert' && api && (
+          <div className="segmented tabs" role="tablist">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={source === 'upload'}
+              className={source === 'upload' ? 'on' : ''}
+              onClick={() => setSource('upload')}
+            >
+              Upload
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={source === 'library'}
+              className={source === 'library' ? 'on' : ''}
+              onClick={() => setSource('library')}
+            >
+              From library
+            </button>
+          </div>
+        )}
+
+        {fromLibrary && api ? (
+          <>
+            <LibraryPicker
+              api={api}
+              selected={picked?.url}
+              onSelect={(image) => {
+                setPicked(image);
+                if (altIsAuto.current)
+                  setAlt(
+                    commonAlt(image) ||
+                      altFromName(image.name.replace(/-[0-9a-f]{8}(\.[^.]+)$/, '$1')),
+                  );
+              }}
+            />
+            {picked && (
+              <label className="field">
+                <span className="label">
+                  Alt text <em>(required)</em>
+                </span>
+                <input
+                  value={alt}
+                  onChange={(e) => {
+                    altIsAuto.current = e.currentTarget.value === '';
+                    setAlt(e.currentTarget.value);
+                  }}
+                  placeholder="Describe the image"
+                  maxLength={500}
+                />
+                <span className="field-note">
+                  Inserts <code>{picked.url}</code>. The file is reused, not copied.
+                </span>
+              </label>
+            )}
+          </>
+        ) : !file && loading ? (
           <div className="drop">
             <strong>Loading current image…</strong>
           </div>
@@ -523,7 +602,7 @@ export function ImageDialog({
           </>
         )}
 
-        {(file || mode === 'edit') && !loading && (
+        {!fromLibrary && (file || mode === 'edit') && !loading && (
           <>
             <label className="field">
               <span className="label">File name</span>

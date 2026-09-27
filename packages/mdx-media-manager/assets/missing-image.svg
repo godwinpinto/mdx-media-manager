@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="320" viewBox="0 0 960 320">
+  <rect width="960" height="320" rx="16" fill="#fef3c7"/>
+  <rect x="4" y="4" width="952" height="312" rx="14" fill="none" stroke="#f59e0b" stroke-width="4" stroke-dasharray="14 10"/>
+  <g fill="none" stroke="#b45309" stroke-width="10" stroke-linecap="round" stroke-linejoin="round" transform="translate(440 70)">
+    <rect x="0" y="0" width="80" height="64" rx="8"/>
+    <path d="M0 50 L24 28 L44 46 L58 34 L80 54"/>
+    <path d="M-8 -8 L88 72"/>
+  </g>
+  <text x="480" y="200" text-anchor="middle" font-family="system-ui, -apple-system, Segoe UI, sans-serif" font-size="34" font-weight="700" fill="#92400e">Missing image</text>
+  <text x="480" y="246" text-anchor="middle" font-family="system-ui, -apple-system, Segoe UI, sans-serif" font-size="22" fill="#92400e">The file this page references doesn't exist. Hover it to replace or remove it.</text>
+</svg>

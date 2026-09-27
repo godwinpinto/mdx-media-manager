@@ -1,7 +1,34 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ApiError, createApi, type Status } from './api';
 import { ImageDialog, type DialogResult } from './dialog';
-import { blockAt, imageAt, type Block, type ImageTarget, type SourceTag } from './dom';
+import {
+  blockAt,
+  imageAt,
+  parseTag,
+  SOURCE_ATTR,
+  type Block,
+  type ImageTarget,
+  type SourceTag,
+} from './dom';
+import { LibraryPanel } from './library';
+
+/** `#mmm=<file>:<line>`: set by the library's "open" links */
+const JUMP_PREFIX = '#mmm=';
+
+/** The rendered element for `file:line`: an exact match (preferring an image), else the closest block above it. */
+function findSourceElement(file: string, line: number): HTMLElement | undefined {
+  let best: { element: HTMLElement; line: number } | undefined;
+  for (const element of document.querySelectorAll<HTMLElement>(`[${SOURCE_ATTR}]`)) {
+    const tag = parseTag(element.getAttribute(SOURCE_ATTR));
+    if (!tag || tag.file !== file || tag.line > line) continue;
+    const better =
+      !best ||
+      tag.line > best.line ||
+      (tag.line === best.line && element.tagName === 'IMG' && best.element.tagName !== 'IMG');
+    if (better && element.getBoundingClientRect().height > 0) best = { element, line: tag.line };
+  }
+  return best?.element;
+}
 
 const STORAGE_KEY = 'mdx-media-manager:enabled';
 
@@ -50,6 +77,8 @@ export function App({ basePath, host }: { basePath: string; host: HTMLElement })
   const [error, setError] = useState<string>();
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [toast, setToast] = useState<Toast>();
+  const [libraryOpen, setLibraryOpen] = useState(false);
+  const [flash, setFlash] = useState<HTMLElement>();
   const [, setFrame] = useState(0);
   const pending = useRef(0);
 
@@ -64,8 +93,49 @@ export function App({ basePath, host }: { basePath: string; host: HTMLElement })
   }, [toast]);
 
   // Track what's under the pointer.
+  // Library "open" links land here: scroll to the spot and highlight it.
   useEffect(() => {
-    if (!enabled || task) return;
+    let timer: ReturnType<typeof setInterval> | undefined;
+    const jump = () => {
+      if (!location.hash.startsWith(JUMP_PREFIX)) return;
+      const raw = decodeURIComponent(location.hash.slice(JUMP_PREFIX.length));
+      const separator = raw.lastIndexOf(':');
+      const file = raw.slice(0, separator);
+      const line = Number(raw.slice(separator + 1));
+      history.replaceState(null, '', location.pathname + location.search);
+      setLibraryOpen(false);
+      let tries = 0;
+      clearInterval(timer);
+      // Content can render after the overlay (streaming, client-side MDX): retry briefly.
+      timer = setInterval(() => {
+        const element = findSourceElement(file, line);
+        if (element || ++tries > 30) clearInterval(timer);
+        if (!element) return;
+        element.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        setFlash(element);
+        setTimeout(() => setFlash((current) => (current === element ? undefined : current)), 2500);
+      }, 100);
+    };
+    jump();
+    window.addEventListener('hashchange', jump);
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener('hashchange', jump);
+    };
+  }, []);
+
+  // Keep the highlight attached while the page scrolls to it.
+  useEffect(() => {
+    if (!flash) return;
+    let frame = requestAnimationFrame(function tick() {
+      setFrame((n) => n + 1);
+      frame = requestAnimationFrame(tick);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [flash]);
+
+  useEffect(() => {
+    if (!enabled || task || libraryOpen) return;
     let x = 0;
     let y = 0;
     const update = () => {
@@ -105,7 +175,7 @@ export function App({ basePath, host }: { basePath: string; host: HTMLElement })
       window.removeEventListener('scroll', onScroll, { capture: true });
       window.removeEventListener('resize', onScroll);
     };
-  }, [enabled, task, host]);
+  }, [enabled, task, host, libraryOpen]);
 
   useEffect(() => setConfirmDelete(false), [image?.element]);
 
@@ -144,7 +214,13 @@ export function App({ basePath, host }: { basePath: string; host: HTMLElement })
   function submit(result: DialogResult) {
     if (!task) return;
     const { tag, url } = task.kind === 'edit' ? task.image : { tag: task.tag, url: '' };
-    if (task.kind === 'insert') {
+    if (task.kind === 'insert' && result.existing) {
+      const existing = result.existing;
+      void run(
+        () => api.insertExisting(tag, task.position, existing, result.alt ?? ''),
+        'Image inserted.',
+      );
+    } else if (task.kind === 'insert') {
       const options = {
         alt: result.alt ?? '',
         name: result.name,
@@ -175,8 +251,13 @@ export function App({ basePath, host }: { basePath: string; host: HTMLElement })
     void run(() => api.remove(target.tag, target.url), 'Image removed.');
   }
 
-  const blockRect = enabled && !task ? block?.element.getBoundingClientRect() : undefined;
-  const imageRect = enabled && !task ? image?.element.getBoundingClientRect() : undefined;
+  const idle = enabled && !task && !libraryOpen;
+  const blockRect = idle ? block?.element.getBoundingClientRect() : undefined;
+  const imageRect = idle ? image?.element.getBoundingClientRect() : undefined;
+  const flashRect = flash?.getBoundingClientRect();
+  const currentFile = parseTag(
+    document.querySelector(`[${SOURCE_ATTR}]`)?.getAttribute(SOURCE_ATTR) ?? null,
+  )?.file;
 
   return (
     <>
@@ -217,6 +298,11 @@ export function App({ basePath, host }: { basePath: string; host: HTMLElement })
           className="toolbar"
           style={{ top: Math.max(8, imageRect.top + 8), left: imageRect.right - 8 }}
         >
+          {image.missing && (
+            <span className="missing-label" title={image.url}>
+              Missing: <code>{image.url}</code>
+            </span>
+          )}
           <button
             type="button"
             disabled={!status || busy}
@@ -246,9 +332,14 @@ export function App({ basePath, host }: { basePath: string; host: HTMLElement })
           }
           current={
             task.kind === 'edit'
-              ? { url: task.image.url, alt: task.image.element.getAttribute('alt') ?? '' }
+              ? {
+                  url: task.image.url,
+                  alt: task.image.element.getAttribute('alt') ?? '',
+                  missing: task.image.missing,
+                }
               : undefined
           }
+          api={api}
           busy={busy}
           error={error}
           onSubmit={submit}
@@ -256,20 +347,51 @@ export function App({ basePath, host }: { basePath: string; host: HTMLElement })
         />
       )}
 
+      {libraryOpen && (
+        <LibraryPanel api={api} currentFile={currentFile} onClose={() => setLibraryOpen(false)} />
+      )}
+
+      {flashRect && (
+        <div
+          className="flash"
+          style={{
+            top: flashRect.top,
+            left: flashRect.left,
+            width: flashRect.width,
+            height: flashRect.height,
+          }}
+        />
+      )}
+
       {toast && <div className={`toast ${toast.tone}`}>{toast.text}</div>}
 
-      <button
-        type="button"
-        className={`toggle ${enabled ? 'on' : ''} ${offline ? 'offline' : ''}`}
-        onClick={toggle}
-        title={
-          offline ??
-          (enabled ? 'Hover content to add, edit or delete images' : 'Image manager is off')
-        }
-      >
-        <span className="dot" />
-        Images {enabled ? 'on' : 'off'}
-      </button>
+      <div className="dock">
+        <button
+          type="button"
+          className="library-button"
+          disabled={!status}
+          onClick={() => {
+            setBlock(undefined);
+            setImage(undefined);
+            setLibraryOpen(true);
+          }}
+          title="Browse, rename and clean up images"
+        >
+          Library
+        </button>
+        <button
+          type="button"
+          className={`toggle ${enabled ? 'on' : ''} ${offline ? 'offline' : ''}`}
+          onClick={toggle}
+          title={
+            offline ??
+            (enabled ? 'Hover content to add, edit or delete images' : 'Image manager is off')
+          }
+        >
+          <span className="dot" />
+          Images {enabled ? 'on' : 'off'}
+        </button>
+      </div>
     </>
   );
 }

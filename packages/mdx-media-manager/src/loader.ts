@@ -1,6 +1,7 @@
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { placeholderFile, substituteMissingImages } from './missing';
 import { transformCompiledMdx } from './transform';
 
 export interface LoaderOptions {
@@ -46,6 +47,10 @@ export default function loader(this: LoaderContext, source: string): void {
   const options = this.getOptions();
   const callback = this.async();
   const resourcePath = this.resourcePath;
+  const { code: patched, missing } = substituteMissingImages(source, {
+    resourcePath,
+    publicDir: options.publicDir,
+  });
 
   const finish: Callback = (err, code, map) => {
     if (err || code === undefined) return callback(err);
@@ -57,6 +62,8 @@ export default function loader(this: LoaderContext, source: string): void {
         publicDir: options.publicDir,
         basePath: options.basePath,
         clientModule: options.clientModule,
+        missing,
+        placeholderFile,
       });
       // Positions are baked into the output; the inner source map no longer lines up.
       callback(null, out);
@@ -81,7 +88,7 @@ export default function loader(this: LoaderContext, source: string): void {
 
   loadInner(options.inner, this.rootContext)
     .then((inner) => {
-      const result = inner.call(context, source);
+      const result = inner.call(context, patched);
       if (typeof result === 'string') finish(null, result);
     })
     .catch((err: Error) => callback(err));

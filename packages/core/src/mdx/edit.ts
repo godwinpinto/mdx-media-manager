@@ -167,33 +167,117 @@ export function replaceImage(
   format: SourceFormat,
 ): string {
   const { node } = resolveImage(source, input.image, format);
+  const s = new MagicString(source);
+  rewriteImage(s, source, node, input.url, input.alt);
+  return verify(s.toString(), format, input.url);
+}
+
+/** Point one image node at `url` and optionally set its alt text, in place. */
+function rewriteImage(
+  s: MagicString,
+  source: string,
+  node: ImageNode,
+  url: string,
+  alt?: string,
+): void {
   const start = startOf(node);
   const end = endOf(node);
-  const s = new MagicString(source);
 
   if (node.type === 'image') {
-    s.overwrite(start, end, markdownImage(input.alt ?? node.alt ?? '', input.url, node.title));
-  } else {
-    const text = source.slice(start, end);
-    const replaced = text
-      .replace(
-        /(\bsrc\s*=\s*)(["'])(?:(?!\2).)*\2/,
-        (_, head: string, quote: string) => `${head}${quote}${input.url}${quote}`,
-      )
-      .replace(/(\balt\s*=\s*)(["'])(?:(?!\2).)*\2/, (match, head: string, quote: string) =>
-        input.alt === undefined
-          ? match
-          : `${head}${quote}${input.alt.replace(new RegExp(quote, 'g'), '')}${quote}`,
-      );
-    if (replaced === text) {
-      throw new EditError(
-        'UNSUPPORTED',
-        'This image uses a dynamic `src` expression and cannot be replaced.',
-      );
-    }
-    s.overwrite(start, end, replaced);
+    s.overwrite(start, end, markdownImage(alt ?? node.alt ?? '', url, node.title));
+    return;
   }
-  return verify(s.toString(), format, input.url);
+
+  const text = source.slice(start, end);
+  const quoteSafe = (value: string, quote: string) => value.replace(new RegExp(quote, 'g'), '');
+  let replaced = text.replace(
+    /(\bsrc\s*=\s*)(["'])(?:(?!\2).)*\2/,
+    (_, head: string, quote: string) => `${head}${quote}${url}${quote}`,
+  );
+  if (replaced === text && imageUrl(node) !== url) {
+    throw new EditError(
+      'UNSUPPORTED',
+      'This image uses a dynamic `src` expression and cannot be changed.',
+    );
+  }
+  if (alt !== undefined) {
+    const withAlt = replaced.replace(
+      /(\balt\s*=\s*)(["'])(?:(?!\2).)*\2/,
+      (_, head: string, quote: string) => `${head}${quote}${quoteSafe(alt, quote)}${quote}`,
+    );
+    // No alt attribute yet: add one right after `src`.
+    replaced =
+      withAlt !== replaced
+        ? withAlt
+        : replaced.replace(
+            /(\bsrc\s*=\s*(["'])(?:(?!\2).)*\2)/,
+            (m, _src, quote: string) => `${m} alt=${quote}${quoteSafe(alt, quote)}${quote}`,
+          );
+  }
+  s.overwrite(start, end, replaced);
+}
+
+export interface ImageUsage {
+  url: string;
+  alt: string;
+  line: number;
+  column: number;
+  /** `markdown` for `![]()`, otherwise the JSX element name (`img`, `Image`) */
+  element: string;
+}
+
+/** Every image in the source with a literal URL, in document order. */
+export function listImageUsages(source: string, format: SourceFormat): ImageUsage[] {
+  const usages: ImageUsage[] = [];
+  const visit = (node: Nodes) => {
+    if (isImage(node)) {
+      const url = imageUrl(node);
+      const start = node.position?.start;
+      if (url && start) {
+        usages.push({
+          url,
+          alt: node.type === 'image' ? (node.alt ?? '') : jsxAlt(node),
+          line: start.line,
+          column: start.column,
+          element: node.type === 'image' ? 'markdown' : (node.name ?? 'img'),
+        });
+      }
+    }
+    if ('children' in node) node.children.forEach((child) => visit(child as Nodes));
+  };
+  visit(parse(source, format));
+  return usages;
+}
+
+function jsxAlt(node: Extract<ImageNode, { attributes: unknown }>): string {
+  for (const attr of node.attributes) {
+    if (attr.type === 'mdxJsxAttribute' && attr.name === 'alt' && typeof attr.value === 'string')
+      return attr.value;
+  }
+  return '';
+}
+
+/**
+ * Rewrite every image that uses `from`: point it at `to.url` and/or set `to.alt`.
+ * @returns the new source and how many images changed
+ */
+export function rewriteImagesByUrl(
+  source: string,
+  from: string,
+  to: { url?: string; alt?: string },
+  format: SourceFormat,
+): { source: string; count: number } {
+  const images: ImageNode[] = [];
+  const visit = (node: Nodes) => {
+    if (isImage(node) && imageUrl(node) === from) images.push(node);
+    if ('children' in node) node.children.forEach((child) => visit(child as Nodes));
+  };
+  visit(parse(source, format));
+  if (images.length === 0) return { source, count: 0 };
+
+  const s = new MagicString(source);
+  for (const node of images) rewriteImage(s, source, node, to.url ?? from, to.alt);
+  return { source: verify(s.toString(), format, to.url ?? from), count: images.length };
 }
 
 /** Remove the whole lines spanned by [start, end), plus one adjacent blank line. */

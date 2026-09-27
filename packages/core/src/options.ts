@@ -32,6 +32,11 @@ export interface MediaManagerOptions {
   maxUploadSize?: number;
   /** Hostnames allowed in addition to localhost, 127.0.0.1 and ::1 (e.g. a LAN name). */
   allowedHosts?: string[];
+  /**
+   * URL of the page built from a content file (path relative to `root`), for "open page" links in
+   * the library. @defaultValue `content/docs/a/index.mdx` → `/docs/a` (Fumadocs' convention)
+   */
+  pageUrl?: (file: string) => string | undefined;
 }
 
 export interface ResolvedOptions {

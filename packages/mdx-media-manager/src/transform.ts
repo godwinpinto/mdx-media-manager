@@ -12,6 +12,8 @@ import MagicString from 'magic-string';
 export const SOURCE_ATTR = 'data-mmm';
 /** The image URL as written in source, on rendered images */
 export const IMAGE_ATTR = 'data-mmm-img';
+/** Set on images whose file doesn't exist (rendered as a placeholder) */
+export const MISSING_ATTR = 'data-mmm-missing';
 
 export interface TransformOptions {
   /** Absolute path of the MDX file being compiled */
@@ -25,6 +27,9 @@ export interface TransformOptions {
   /** Module that exports `MediaManagerOverlay` */
   clientModule: string;
   basePath: string;
+  /** Original URLs of images replaced by `placeholderFile`, in document order */
+  missing?: string[];
+  placeholderFile?: string;
 }
 
 interface AnyNode extends Node {
@@ -98,6 +103,9 @@ export function transformCompiledMdx(code: string, options: TransformOptions): s
 
   // Default imports of files (`import __img0 from "../../public/a.png"`) → public URLs
   const importedUrls = new Map<string, string>();
+  /** Imports of the missing-image placeholder */
+  const placeholderIds = new Set<string>();
+  const missing = [...(options.missing ?? [])];
   for (const statement of ast.body as AnyNode[]) {
     if (statement.type !== 'ImportDeclaration') continue;
     const specifier = (statement.specifiers as AnyNode[]).find(
@@ -106,6 +114,10 @@ export function transformCompiledMdx(code: string, options: TransformOptions): s
     const from = literal<string>(statement.source as AnyNode, 'string');
     if (!specifier || !from || !from.startsWith('.')) continue;
     const file = path.resolve(path.dirname(options.resourcePath), from.split('?')[0]!);
+    if (options.placeholderFile && file === options.placeholderFile) {
+      placeholderIds.add((specifier.local as AnyNode).name as string);
+      continue;
+    }
     const inPublic = path.relative(options.publicDir, file);
     if (!inPublic.startsWith('..') && !path.isAbsolute(inPublic)) {
       importedUrls.set(
@@ -198,8 +210,16 @@ export function transformCompiledMdx(code: string, options: TransformOptions): s
         }
 
         if (element === 'img' || element === 'Image') {
-          const url = imageUrlOf(props);
-          if (url) addProp(props, IMAGE_ATTR, url);
+          const src = propertyValue(props, 'src');
+          if (src?.type === 'Identifier' && placeholderIds.has(src.name as string)) {
+            // Images are compiled in document order, the same order they were substituted in.
+            const original = missing.shift();
+            if (original) addProp(props, IMAGE_ATTR, original);
+            addProp(props, MISSING_ATTR, 'true');
+          } else {
+            const url = imageUrlOf(props);
+            if (url) addProp(props, IMAGE_ATTR, url);
+          }
         }
       }
     }

@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises';
 import type { MediaManagerOptions } from '@mdx-media-manager/core';
 import type { Plugin } from 'vite';
+import { placeholderFile, substituteMissingImages } from './missing';
 import { transformCompiledMdx } from './transform';
 
 export interface MdxMediaManagerViteOptions extends MediaManagerOptions {
@@ -27,6 +28,8 @@ export function mdxMediaManager(options: MdxMediaManagerViteOptions = {}): Plugi
   let root = options.root ?? process.cwd();
   let publicDir = '';
   let basePath = '';
+  /** Missing images substituted per file, for the late transform to label */
+  const missingByFile = new Map<string, string[]>();
 
   return [
     {
@@ -64,6 +67,22 @@ export function mdxMediaManager(options: MdxMediaManagerViteOptions = {}): Plugi
           handle(req, res).catch(next);
         });
       },
+      // Before the MDX compiler: keep a missing image from failing the whole page. Fumadocs
+      // compiles in an `order: 'pre'` transform, so this one must be `pre` too (and this plugin
+      // comes earlier) to see the raw MDX.
+      transform: {
+        order: 'pre',
+        handler(code, id) {
+          const [file] = id.split('?');
+          if (!file || !include.test(file) || id.includes('virtual:')) return;
+          const { code: patched, missing } = substituteMissingImages(code, {
+            resourcePath: file,
+            publicDir,
+          });
+          missingByFile.set(file, missing);
+          if (missing.length) return { code: patched, map: null };
+        },
+      },
     },
     {
       // Late, so it sees the MDX compiler's output (with `jsxDEV` source positions).
@@ -89,6 +108,8 @@ export function mdxMediaManager(options: MdxMediaManagerViteOptions = {}): Plugi
               publicDir,
               basePath,
               clientModule,
+              missing: missingByFile.get(file),
+              placeholderFile,
             }),
             map: null,
           };

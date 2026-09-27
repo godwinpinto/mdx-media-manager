@@ -78,6 +78,25 @@ server never loads `vite.config.ts`.
 - **Turn off**: the **Images on/off** button in the bottom-right corner (remembered per browser),
   or `MDX_MEDIA_MANAGER=false next dev`.
 
+### Library
+
+The **Library** button (next to **Images on/off**) opens every image in `public/images`, plus any
+other public image your content uses:
+
+- **Browse and search** by name, alt text or page. Each image shows its size, dimensions, format and
+  every place it's used, with links that open the page and highlight the spot.
+- **Rename everywhere** updates every page that uses the image. If code (e.g. a `.tsx` file) still
+  mentions the old URL, the old file is kept and the panel says where.
+- **Alt text on every use** sets the same description everywhere, including JSX `<img>`s that had none.
+- **Health checks**: _Unused_ images (no page or code file mentions them; delete them one by one or
+  all at once), _Missing alt_ text, and _Broken_ references to files that don't exist.
+- **Insert from the library**: the Insert dialog has a _From library_ tab that reuses an existing
+  file instead of uploading a copy.
+
+Missing images don't break your dev server: Fumadocs turns images into imports, so one missing
+file would fail every page. In development they're shown as a _Missing image_ placeholder you can
+hover to replace or remove. Production builds still fail on broken references, as they should.
+
 ### File names
 
 Images go to `public/images/<page path>/<name>-<hash>.<ext>` and are referenced as
@@ -105,6 +124,9 @@ Pass them as the second argument of `withMdxMediaManager(config, options)` or to
   image: { format: 'webp', quality: 82, maxWidth: 1600 },
   maxUploadSize: 25 * 1024 * 1024,
   allowedHosts: [], // extra hostnames besides localhost, e.g. a LAN name
+  // Page URL for a content file (for the library's "open" links). The default follows Fumadocs:
+  // content/docs/a/index.mdx → /docs/a. For example, to drop the content folder name:
+  pageUrl: (file) => `/${file.replace(/^content\//, '').replace(/\.mdx?$/, '')}`,
 }
 ```
 

@@ -1,6 +1,7 @@
 /** Mirrors the attributes written by the MDX transform. */
 export const SOURCE_ATTR = 'data-mmm';
 export const IMAGE_ATTR = 'data-mmm-img';
+export const MISSING_ATTR = 'data-mmm-missing';
 
 export interface SourceTag {
   file: string;
@@ -59,11 +60,14 @@ export interface ImageTarget {
   tag: SourceTag;
   /** URL as written in source */
   url: string;
+  /** The file doesn't exist; a placeholder is shown */
+  missing: boolean;
 }
 
 export function imageAt(node: Element | null): ImageTarget | undefined {
   const element = node?.closest<HTMLImageElement>(`img[${IMAGE_ATTR}]`);
   const url = element?.getAttribute(IMAGE_ATTR);
   const tag = parseTag(element?.getAttribute(SOURCE_ATTR) ?? null);
-  if (element && url && tag) return { element, tag, url };
+  if (element && url && tag)
+    return { element, tag, url, missing: element.hasAttribute(MISSING_ATTR) };
 }

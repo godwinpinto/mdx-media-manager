@@ -16,7 +16,8 @@
     "mdx-media-manager": "./dist/cli.js"
   },
   "files": [
-    "dist"
+    "dist",
+    "assets"
   ],
   "type": "module",
   "sideEffects": false,

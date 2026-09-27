@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { z } from 'zod';
@@ -6,7 +5,6 @@ import {
   existsSync,
   imageFolderFor,
   isInside,
-  isReferenced,
   publicFileOf,
   publicUrlOf,
   resolveSourceFile,
@@ -21,6 +19,8 @@ import { hashSource } from './mdx/hash';
 import { formatOf } from './mdx/parse';
 import { resolveOptions, type MediaManagerOptions, type ResolvedOptions } from './options';
 import { createRouter, HttpError, json } from './router';
+import { copyUnderName, removeIfOrphaned as removeIfOrphanedFile } from './images';
+import { createLibrary } from './library';
 import { checkRequest } from './security';
 
 const target = z.object({
@@ -94,18 +94,39 @@ export const updateBody = z.object({
 
 export const deleteBody = z.object({ ...source, image: imageRef });
 
-export const namesQuery = z.object({
-  file: source.file,
-  name: z.string().trim().min(1).max(100),
-  /** The image being renamed, if any */
-  url: z.string().max(2048).optional(),
+export const insertExistingBody = z.object({
+  ...source,
+  target,
+  position: z.enum(['before', 'after']),
+  alt: z.string().max(500),
+  /** Public URL of an image that already exists, e.g. `/images/a/b.webp` */
+  url: z.string().min(2).max(2048).startsWith('/'),
 });
+
+const libraryUrl = z.string().min(2).max(2048).startsWith('/');
+export const libraryRenameBody = z.object({
+  url: libraryUrl,
+  name: z.string().trim().min(1).max(100),
+});
+export const libraryAltBody = z.object({ url: libraryUrl, alt: z.string().max(500) });
+export const libraryDeleteBody = z.object({ urls: z.array(libraryUrl).min(1).max(500) });
+
+export const namesQuery = z
+  .object({
+    /** Page the new image is for (its folder is checked); not needed when `url` is given */
+    file: source.file.optional(),
+    name: z.string().trim().min(1).max(100),
+    /** The image being renamed, if any */
+    url: z.string().max(2048).optional(),
+  })
+  .refine((query) => query.file || query.url, 'Pass `file` or `url`.');
 
 export type InsertMeta = z.infer<typeof insertMeta>;
 export type ReplaceMeta = z.infer<typeof replaceMeta>;
 export type UpdateBody = z.infer<typeof updateBody>;
 export type DeleteBody = z.infer<typeof deleteBody>;
 export type NamesQuery = z.infer<typeof namesQuery>;
+export type InsertExistingBody = z.infer<typeof insertExistingBody>;
 
 export interface EditResponse {
   /** Source file that was edited */
@@ -192,42 +213,8 @@ function createOperations(options: ResolvedOptions) {
     };
   }
 
-  /** Delete an image file we manage once no project file mentions it. */
-  async function removeIfOrphaned(url: string | undefined): Promise<string | undefined> {
-    if (!url) return;
-    const file = publicFileOf(options.publicDir, url);
-    if (!file || !isInside(options.imagesDir, file) || !existsSync(file)) return;
-    if (await isReferenced(options.root, options.publicDir, url)) return;
-    await fs.rm(file, { force: true });
-    return url;
-  }
-
-  /**
-   * Copy an image in `publicDir` to `<name>-<content hash>.<ext>` in the same folder. The old file
-   * stays until nothing references it, so other pages using it keep working.
-   */
-  async function renameImage(url: string, name: string) {
-    const current = publicFileOf(options.publicDir, url);
-    if (!current || !existsSync(current)) {
-      throw new EditError('UNSUPPORTED', 'Only images stored in the public folder can be renamed.');
-    }
-    const data = await fs.readFile(current);
-    const hash = createHash('sha256').update(data).digest('hex').slice(0, 8);
-    const target = path.join(
-      path.dirname(current),
-      `${slugify(name)}-${hash}${path.extname(current).toLowerCase()}`,
-    );
-    if (!isInside(options.publicDir, target))
-      throw new EditError('INVALID', 'Invalid image location.');
-    if (target === current) return { url, discard: undefined };
-
-    const created = !existsSync(target);
-    if (created) await writeAtomic(target, data);
-    return {
-      url: publicUrlOf(options.publicDir, target),
-      discard: () => (created ? fs.rm(target, { force: true }) : Promise.resolve()),
-    };
-  }
+  const removeIfOrphaned = (url: string | undefined) => removeIfOrphanedFile(options, url);
+  const renameImage = (url: string, name: string) => copyUnderName(options, url, name);
 
   async function commit(sourceFile: string, next: string, discard?: () => Promise<unknown>) {
     try {
@@ -271,6 +258,24 @@ function createOperations(options: ResolvedOptions) {
           width: stored.width,
           height: stored.height,
         };
+      });
+    },
+
+    /** Place an image that is already in the public folder (from the library). */
+    async insertExisting(body: InsertExistingBody): Promise<EditResponse> {
+      const sourceFile = await resolveSourceFile(options.root, body.file);
+      const imageFile = publicFileOf(options.publicDir, body.url);
+      if (!imageFile || !existsSync(imageFile)) {
+        throw new EditError('NOT_FOUND', `Image not found in the public folder: ${body.url}`);
+      }
+      return withFileLock(sourceFile, async () => {
+        const text = await readSource(sourceFile, body.hash);
+        const next = insertImage(
+          text,
+          { target: body.target, position: body.position, url: body.url, alt: body.alt },
+          formatOf(sourceFile),
+        );
+        return { file: body.file, hash: await commit(sourceFile, next), url: body.url };
       });
     },
 
@@ -331,10 +336,11 @@ function createOperations(options: ResolvedOptions) {
      * about look-alike names; files never collide because the hash is part of the name.
      */
     async similarNames(query: NamesQuery): Promise<{ matches: string[] }> {
-      const sourceFile = await resolveSourceFile(options.root, query.file);
       // Renames stay in the image's folder; new images go to the page's folder.
       const currentFile = query.url ? publicFileOf(options.publicDir, query.url) : undefined;
-      const folder = currentFile ? path.dirname(currentFile) : imageFolderFor(options, sourceFile);
+      const folder = currentFile
+        ? path.dirname(currentFile)
+        : imageFolderFor(options, await resolveSourceFile(options.root, query.file!));
       if (folder !== options.publicDir && !isInside(options.publicDir, folder))
         return { matches: [] };
 
@@ -369,6 +375,7 @@ function createOperations(options: ResolvedOptions) {
 export function createMediaManager(input: MediaManagerOptions = {}) {
   const options = resolveOptions(input);
   const operations = createOperations(options);
+  const library = createLibrary(options, input.pageUrl);
 
   const handler = createRouter({
     basePath: options.basePath,
@@ -381,6 +388,32 @@ export function createMediaManager(input: MediaManagerOptions = {}) {
           image: options.image,
           maxUploadSize: options.maxUploadSize,
         }),
+      },
+      '/library': {
+        method: 'GET',
+        handle: () => library.scan(),
+      },
+      '/library/rename': {
+        method: 'POST',
+        handle: ({ body }) => {
+          const { url, name } = libraryRenameBody.parse(body);
+          return library.rename(url, name);
+        },
+      },
+      '/library/alt': {
+        method: 'POST',
+        handle: ({ body }) => {
+          const { url, alt } = libraryAltBody.parse(body);
+          return library.setAlt(url, alt);
+        },
+      },
+      '/library/delete': {
+        method: 'POST',
+        handle: ({ body }) => library.deleteUnused(libraryDeleteBody.parse(body).urls),
+      },
+      '/images/insert-existing': {
+        method: 'POST',
+        handle: ({ body }) => operations.insertExisting(insertExistingBody.parse(body)),
       },
       '/images/names': {
         method: 'GET',
