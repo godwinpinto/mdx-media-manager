@@ -80,7 +80,7 @@ export function createApi(basePath: string) {
       tag: SourceTag,
       position: 'before' | 'after',
       file: File,
-      options: { alt: string; crop?: Crop; output?: Output },
+      options: { alt: string; name?: string; crop?: Crop; output?: Output },
     ) =>
       upload<EditResponse>('/images/insert', file, {
         file: tag.file,
@@ -94,13 +94,32 @@ export function createApi(basePath: string) {
       tag: SourceTag,
       url: string,
       file: File,
-      options: { alt?: string; crop?: Crop; output?: Output },
+      options: { alt?: string; name?: string; crop?: Crop; output?: Output },
     ) =>
       upload<EditResponse>('/images/replace', file, {
         file: tag.file,
         hash: tag.hash,
         image: { target: target(tag), url },
         ...options,
+      }),
+
+    /** Images in the destination folder already named `name` (for a look-alike warning) */
+    similarNames: (tag: SourceTag, name: string, url?: string) =>
+      call<{ matches: string[] }>(
+        `/images/names?${new URLSearchParams({ file: tag.file, name, ...(url ? { url } : {}) })}`,
+      ).then((res) => res.matches),
+
+    /** Rename and/or change alt text without touching the image data */
+    update: (tag: SourceTag, url: string, options: { alt?: string; name?: string }) =>
+      call<EditResponse>('/images/update', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          file: tag.file,
+          hash: tag.hash,
+          image: { target: target(tag), url },
+          ...options,
+        }),
       }),
 
     remove: (tag: SourceTag, url: string) =>

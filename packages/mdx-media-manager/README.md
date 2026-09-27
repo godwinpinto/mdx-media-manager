@@ -71,13 +71,26 @@ server never loads `vite.config.ts`.
 
 - **Insert**: hover any block (paragraphs, headings, lists, code, tables, and content inside
   components like `<Callout>` or `<Tab>`), then click **+ Image above/below**.
-- **Replace / Delete**: hover an image and use the toolbar in its top-right corner.
+- **Edit / Delete**: hover an image and use the toolbar in its top-right corner. Edit opens the
+  current image: rename it, change its alt text, crop or convert it, or drop/paste a new one.
+  Renaming or changing alt text alone doesn't re-encode the image.
+- **Add images** by dropping a file anywhere on the dialog, pasting (⌘V / Ctrl+V), or choosing a file.
 - **Turn off**: the **Images on/off** button in the bottom-right corner (remembered per browser),
   or `MDX_MEDIA_MANAGER=false next dev`.
 
-Images go to `public/images/<page path>/<name>-<hash>.webp` and are referenced as
-`![alt](/images/…)`. A replaced or deleted image file is removed only when no other project file
-still mentions it.
+### File names
+
+Images go to `public/images/<page path>/<name>-<hash>.<ext>` and are referenced as
+`![alt](/images/…)`.
+
+- Names are URL- and file-system-friendly: lowercase `a–z`, `0–9` and single hyphens, at most 60
+  characters. Accents are removed (`Café` → `cafe`), and characters outside the Latin alphabet are
+  dropped. The dialog shows the name that will be saved, and blocks names with no letters or digits.
+- The short content hash means files never overwrite each other. The same image under the same name
+  reuses its file, and a different image under the same name gets its own file. The dialog warns
+  when a similar name already exists in the folder.
+- A replaced, renamed or deleted image file is removed only when no other project file still
+  mentions it.
 
 ## Options
 

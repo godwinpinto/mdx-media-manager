@@ -71,6 +71,16 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   color: var(--accent); font-weight: 600; font-size: 15px;
 }
 .hint { margin: 0; }
+.name-input { display: flex; align-items: center; gap: 6px; }
+.name-input input { flex: 1; min-width: 0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+.name-input input[aria-invalid="true"] { border-color: var(--danger); }
+.field-note { color: var(--muted); font-size: 12px; }
+.field-note code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--fg); }
+.field-warn { color: #b45309; font-size: 12px; }
+.layer[data-theme="dark"] .field-warn { color: #fbbf24; }
+.field-warn code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.field-error { color: var(--danger); font-size: 12px; }
+.name-input .suffix { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; white-space: nowrap; }
 .hint .link { display: inline; }
 .notice { margin: 0; color: var(--muted); }
 .crop-area { display: flex; justify-content: center; background: var(--field); border-radius: 8px; padding: 8px; }

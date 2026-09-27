@@ -3,6 +3,7 @@ import { existsSync } from 'node:fs';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { EditError } from './mdx/errors';
+import { slugify } from './slug';
 
 export function isInside(dir: string, file: string): boolean {
   const relative = path.relative(dir, file);
@@ -117,17 +118,7 @@ export function publicUrlOf(publicDir: string, file: string): string {
   return `/${path.relative(publicDir, file).split(path.sep).map(encodeURIComponent).join('/')}`;
 }
 
-export function slugify(text: string): string {
-  return (
-    text
-      .normalize('NFKD')
-      .replace(/[̀-ͯ]/g, '')
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-+|-+$/g, '')
-      .slice(0, 60) || 'image'
-  );
-}
+export { slugify } from './slug';
 
 /** Folder for a page's images: `<imagesDir>/<page path inside contentDir>` */
 export function imageFolderFor(

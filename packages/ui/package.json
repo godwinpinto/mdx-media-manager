@@ -20,6 +20,7 @@
     "types:check": "tsc --noEmit"
   },
   "dependencies": {
+    "@mdx-media-manager/core": "workspace:*",
     "react-image-crop": "^11.1.2"
   },
   "devDependencies": {

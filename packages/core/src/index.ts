@@ -4,6 +4,7 @@ export {
   type EditResponse,
   type InsertMeta,
   type ReplaceMeta,
+  type UpdateBody,
   type DeleteBody,
 } from './api';
 export {

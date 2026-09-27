@@ -173,6 +173,170 @@ describe('replace and delete', () => {
   });
 });
 
+describe('naming and update', () => {
+  const json = (url: string, body: object) =>
+    request(url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+
+  async function insertNamed(name?: string) {
+    const res = await upload('/images/insert', {
+      file: 'content/docs/page.mdx',
+      hash: hashSource(page),
+      target: { line: 5, column: 1 },
+      position: 'after',
+      alt: 'Old',
+      name,
+    });
+    return (await res.json()) as { url: string; hash: string };
+  }
+
+  it('uses the given name (slugified) for new images', async () => {
+    const { url } = await insertNamed('Team Photo 2024!');
+    expect(url).toMatch(/^\/images\/page\/team-photo-2024-[0-9a-f]{8}\.webp$/);
+  });
+
+  it('renames an image without re-encoding it and removes the old file', async () => {
+    const first = await insertNamed();
+    const before = await fs.readFile(path.join(root, 'public', first.url));
+    const res = await json('/images/update', {
+      file: 'content/docs/page.mdx',
+      hash: first.hash,
+      image: { target: { line: 7, column: 1 }, url: first.url },
+      name: 'hero',
+      alt: 'New alt',
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as any;
+    expect(body.url).toMatch(/^\/images\/page\/hero-[0-9a-f]{8}\.webp$/);
+    expect(body.removed).toBe(first.url);
+    expect(await fs.readFile(path.join(root, 'public', body.url))).toEqual(before);
+    expect(await read()).toContain(`![New alt](${body.url})`);
+  });
+
+  it('updates only the alt text when no name is given', async () => {
+    const first = await insertNamed();
+    const res = await json('/images/update', {
+      file: 'content/docs/page.mdx',
+      hash: first.hash,
+      image: { target: { line: 7, column: 1 }, url: first.url },
+      alt: 'Only alt',
+    });
+    const body = (await res.json()) as any;
+    expect(body.url).toBe(first.url);
+    expect(await read()).toContain(`![Only alt](${first.url})`);
+  });
+
+  it('keeps the old file when another page still uses it', async () => {
+    const first = await insertNamed();
+    await fs.writeFile(path.join(root, 'content/docs/other.mdx'), `![x](${first.url})\n`);
+    const res = await json('/images/update', {
+      file: 'content/docs/page.mdx',
+      hash: first.hash,
+      image: { target: { line: 7, column: 1 }, url: first.url },
+      name: 'renamed',
+    });
+    const body = (await res.json()) as any;
+    expect(body.removed).toBeUndefined();
+    expect(existsSync(path.join(root, 'public', first.url))).toBe(true);
+    expect(existsSync(path.join(root, 'public', body.url))).toBe(true);
+  });
+
+  it('never overwrites: same name + different image gives a second file', async () => {
+    const first = await insertNamed('hero');
+    const res = await upload(
+      '/images/insert',
+      {
+        file: 'content/docs/page.mdx',
+        hash: first.hash,
+        target: { line: 5, column: 1 },
+        position: 'after',
+        alt: 'B',
+        name: 'hero',
+      },
+      await png(300, 300),
+    );
+    const second = (await res.json()) as any;
+    expect(second.url).not.toBe(first.url);
+    expect(existsSync(path.join(root, 'public', first.url))).toBe(true);
+    expect(existsSync(path.join(root, 'public', second.url))).toBe(true);
+  });
+
+  it('reuses the file when the same image gets the same name', async () => {
+    const first = await insertNamed('hero');
+    const res = await upload('/images/insert', {
+      file: 'content/docs/page.mdx',
+      hash: first.hash,
+      target: { line: 5, column: 1 },
+      position: 'after',
+      alt: 'Again',
+      name: 'hero',
+    });
+    expect(((await res.json()) as any).url).toBe(first.url);
+    expect(await fs.readdir(path.join(root, 'public/images/page'))).toHaveLength(1);
+  });
+
+  it('renaming onto a name used by a different image keeps both files', async () => {
+    const hero = await insertNamed('hero');
+    const res = await upload(
+      '/images/insert',
+      {
+        file: 'content/docs/page.mdx',
+        hash: hero.hash,
+        target: { line: 5, column: 1 },
+        position: 'after',
+        alt: 'Other',
+        name: 'other',
+      },
+      await png(300, 300),
+    );
+    const other = (await res.json()) as any;
+    const renamed = await json('/images/update', {
+      file: 'content/docs/page.mdx',
+      hash: other.hash,
+      image: { target: { line: 7, column: 1 }, url: other.url },
+      name: 'hero',
+    });
+    const body = (await renamed.json()) as any;
+    expect(body.url).toMatch(/\/hero-[0-9a-f]{8}\.webp$/);
+    expect(body.url).not.toBe(hero.url);
+    expect(await fs.readFile(path.join(root, 'public', hero.url))).not.toEqual(
+      await fs.readFile(path.join(root, 'public', body.url)),
+    );
+  });
+
+  it('lists images that already use a name', async () => {
+    const hero = await insertNamed('hero');
+    const names = async (query: Record<string, string>) =>
+      (
+        (await (
+          await request(
+            `/images/names?${new URLSearchParams({ file: 'content/docs/page.mdx', ...query })}`,
+          )
+        ).json()) as any
+      ).matches;
+    expect(await names({ name: 'Hero' })).toEqual([hero.url]);
+    expect(await names({ name: 'her' })).toEqual([]);
+    expect(await names({ name: 'hero-banner' })).toEqual([]);
+    // the image being renamed doesn't count as a clash with itself
+    expect(await names({ name: 'hero', url: hero.url })).toEqual([]);
+  });
+
+  it('refuses to rename images outside the public folder', async () => {
+    const src = `![Remote](https://example.com/a.png)\n`;
+    await fs.writeFile(path.join(root, 'content/docs/page.mdx'), src);
+    const res = await json('/images/update', {
+      file: 'content/docs/page.mdx',
+      hash: hashSource(src),
+      image: { target: { line: 1, column: 1 }, url: 'https://example.com/a.png' },
+      name: 'local',
+    });
+    expect(res.status).toBe(422);
+  });
+});
+
 describe('security', () => {
   it('rejects cross-site origins', async () => {
     const res = await request('/status', { headers: { origin: 'https://evil.example' } });

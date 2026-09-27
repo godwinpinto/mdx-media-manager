@@ -7,20 +7,27 @@ import {
   type FormEvent,
 } from 'react';
 import ReactCrop, { centerCrop, makeAspectCrop, type PercentCrop } from 'react-image-crop';
+import { checkName, slugify } from '@mdx-media-manager/core/slug';
 import type { Crop, Output, Status } from './api';
 
 export interface DialogResult {
-  file: File;
-  alt: string;
+  /** Image to process. In edit mode it is absent when only the name/alt text changed. */
+  file?: File;
+  /** Alt text. In edit mode it is absent when unchanged. */
+  alt?: string;
+  /** File name (slug, without hash/extension). In edit mode it is absent when unchanged. */
+  name?: string;
   crop?: Crop;
   output: Output;
 }
 
 export interface ImageDialogProps {
-  mode: 'insert' | 'replace';
+  mode: 'insert' | 'edit';
   defaults: Status['image'];
-  /** Existing alt text, for replace */
-  alt?: string;
+  /** The image being edited: its URL as written in source, and its alt text */
+  current?: { url: string; alt: string };
+  /** Existing images in the destination folder that already use a name */
+  findSimilar?: (name: string) => Promise<string[]>;
   busy: boolean;
   error?: string;
   onSubmit(result: DialogResult): void;
@@ -44,6 +51,24 @@ const pasteKey = isMac ? '⌘V' : 'Ctrl+V';
 const canReadClipboard =
   typeof navigator !== 'undefined' && typeof navigator.clipboard?.read === 'function';
 
+/** `/images/x/team-photo-1a2b3c4d.webp` → `team-photo` */
+function nameOfUrl(url: string): string {
+  const file = decodeURIComponent(url.split(/[?#]/)[0]!.split('/').pop() ?? '');
+  return slugify(file.replace(/\.[^.]+$/, '').replace(/-[0-9a-f]{8}$/, ''));
+}
+
+function extensionOfUrl(url: string): string {
+  return /\.([a-z0-9]+)(?:[?#].*)?$/i.exec(url)?.[1]?.toLowerCase() ?? '';
+}
+
+const outputFormats: Record<string, Output['format']> = {
+  webp: 'webp',
+  avif: 'avif',
+  png: 'png',
+  jpg: 'jpeg',
+  jpeg: 'jpeg',
+};
+
 /** `team-photo_2024.png` → `team photo 2024`; generic names (clipboard, screenshots) give nothing */
 function altFromName(name: string): string {
   const base = name.replace(/\.[^.]+$/, '');
@@ -65,13 +90,24 @@ function imageFromClipboard(data: DataTransfer | null): File | undefined {
 export function ImageDialog({
   mode,
   defaults,
-  alt: initialAlt = '',
+  current,
+  findSimilar,
   busy,
   error,
   onSubmit,
   onCancel,
 }: ImageDialogProps) {
+  const initialAlt = current?.alt ?? '';
+  const initialName = current ? nameOfUrl(current.url) : '';
+  const currentExtension = current ? extensionOfUrl(current.url) : '';
+  const initialFormat = (current && outputFormats[currentExtension]) || defaults.format!;
+
   const [file, setFile] = useState<File>();
+  /** Edit mode: the current image, loaded so it can be cropped or converted */
+  const original = useRef<File>(undefined);
+  const [loading, setLoading] = useState(mode === 'edit');
+  /** A name the user typed; otherwise it is derived (insert) or kept (edit) */
+  const [customName, setCustomName] = useState<string>();
   const [preview, setPreview] = useState<string>();
   const [natural, setNatural] = useState<{ width: number; height: number }>();
   const [crop, setCrop] = useState<PercentCrop>(fullCrop);
@@ -79,7 +115,7 @@ export function ImageDialog({
   const [alt, setAlt] = useState(initialAlt);
   /** Alt text still derived from a file name (not typed), so a new file may replace it */
   const altIsAuto = useRef(!initialAlt);
-  const [format, setFormat] = useState(defaults.format);
+  const [format, setFormat] = useState(initialFormat);
   const [quality, setQuality] = useState(defaults.quality);
   const [maxWidth, setMaxWidth] = useState(defaults.maxWidth);
   const [dragging, setDragging] = useState(false);
@@ -103,6 +139,33 @@ export function ImageDialog({
     window.addEventListener('paste', onPaste);
     return () => window.removeEventListener('paste', onPaste);
   });
+
+  // Edit mode starts from the current image, so it can be cropped or converted as is.
+  const currentUrl = current?.url;
+  useEffect(() => {
+    if (!currentUrl) return;
+    let cancelled = false;
+    fetch(currentUrl)
+      .then((res) => (res.ok ? res.blob() : Promise.reject(new Error(String(res.status)))))
+      .then((blob) => {
+        if (cancelled || !blob.type.startsWith('image/')) return;
+        const loaded = new File([blob], currentUrl.split('/').pop() || 'image', {
+          type: blob.type,
+        });
+        original.current = loaded;
+        setFile((existing) => existing ?? loaded);
+      })
+      .catch(() => {
+        if (!cancelled)
+          setNotice(
+            'Could not load the current image. Drop or choose a new one, or just rename it.',
+          );
+      })
+      .finally(() => !cancelled && setLoading(false));
+    return () => {
+      cancelled = true;
+    };
+  }, [currentUrl]);
 
   useEffect(() => {
     if (!file) return;
@@ -182,14 +245,74 @@ export function ImageDialog({
 
   const isFull = crop.x <= 0.01 && crop.y <= 0.01 && crop.width >= 99.99 && crop.height >= 99.99;
 
+  const autoName =
+    mode === 'insert' ? slugify(alt || altFromName(file?.name ?? '') || 'image') : initialName;
+  const nameValue = customName ?? autoName;
+  // Same rules as the server, so what's shown is what gets written.
+  const nameCheck = checkName(nameValue);
+  const finalName = nameCheck.slug;
+
+  /** Whether the image itself must be (re)processed, as opposed to a rename / alt change */
+  const imageChanged =
+    mode === 'insert' ||
+    (!!file &&
+      (file !== original.current ||
+        !isFull ||
+        format !== initialFormat ||
+        quality !== defaults.quality ||
+        maxWidth !== defaults.maxWidth));
+  // Look-alike names: files never collide (the content hash is part of the name), but two
+  // `hero-…` images in one folder are easy to mix up, so say so.
+  const [similar, setSimilar] = useState<string[]>([]);
+  const checkSimilar = !nameCheck.error && (mode === 'insert' || finalName !== initialName);
+  useEffect(() => {
+    setSimilar([]);
+    if (!checkSimilar || !findSimilar) return;
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      findSimilar(finalName).then(
+        (matches) => !cancelled && setSimilar(matches),
+        () => undefined,
+      );
+    }, 250);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+    // findSimilar is recreated on every render of the parent
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [finalName, checkSimilar]);
+
+  const altChanged = alt.trim() !== initialAlt.trim();
+  const nameChanged = finalName !== initialName;
+  const outputExtension = imageChanged ? (format === 'jpeg' ? 'jpg' : format) : currentExtension;
+
+  const canSubmit =
+    !busy &&
+    !nameCheck.error &&
+    (mode === 'insert' ? !!file && !!alt.trim() : imageChanged || altChanged || nameChanged);
+
   function submit(e: FormEvent) {
     e.preventDefault();
-    if (!file || busy) return;
+    if (!canSubmit) return;
+    const output = { format, quality, maxWidth };
+    if (mode === 'insert') {
+      onSubmit({
+        file,
+        alt: alt.trim(),
+        name: finalName,
+        crop: isFull ? undefined : pixels,
+        output,
+      });
+      return;
+    }
     onSubmit({
-      file,
-      alt: alt.trim(),
-      crop: isFull ? undefined : pixels,
-      output: { format, quality, maxWidth },
+      file: imageChanged ? file : undefined,
+      alt: altChanged ? alt.trim() : undefined,
+      // A re-processed image keeps its name unless it was changed.
+      name: nameChanged || imageChanged ? finalName : undefined,
+      crop: imageChanged && !isFull ? pixels : undefined,
+      output,
     });
   }
 
@@ -248,10 +371,10 @@ export function ImageDialog({
         onSubmit={submit}
         role="dialog"
         aria-modal="true"
-        aria-label={mode === 'insert' ? 'Insert image' : 'Replace image'}
+        aria-label={mode === 'insert' ? 'Insert image' : 'Edit image'}
       >
         <header>
-          <h2>{mode === 'insert' ? 'Insert image' : 'Replace image'}</h2>
+          <h2>{mode === 'insert' ? 'Insert image' : 'Edit image'}</h2>
           <button
             type="button"
             className="icon"
@@ -263,7 +386,11 @@ export function ImageDialog({
           </button>
         </header>
 
-        {!file ? (
+        {!file && loading ? (
+          <div className="drop">
+            <strong>Loading current image…</strong>
+          </div>
+        ) : !file ? (
           <div className={`drop ${dragging ? 'active' : ''}`}>
             <strong>Drop, paste ({pasteKey}) or choose an image</strong>
             <div className="drop-actions">
@@ -386,6 +513,70 @@ export function ImageDialog({
               </label>
             </div>
 
+            <p className="muted hint">
+              To use a different image, drop or paste it ({pasteKey}), or{' '}
+              <button type="button" className="link" onClick={() => input.current?.click()}>
+                choose a file
+              </button>
+              .
+            </p>
+          </>
+        )}
+
+        {(file || mode === 'edit') && !loading && (
+          <>
+            <label className="field">
+              <span className="label">File name</span>
+              <span className="name-input">
+                <input
+                  value={nameValue}
+                  onChange={(e) => setCustomName(e.currentTarget.value)}
+                  onBlur={() => {
+                    if (customName === undefined) return;
+                    // Empty → back to the suggested name; otherwise show the cleaned-up name.
+                    if (!customName.trim()) setCustomName(undefined);
+                    else if (nameCheck.slug) setCustomName(nameCheck.slug);
+                  }}
+                  aria-invalid={!!nameCheck.error}
+                  aria-describedby="mmm-name-help"
+                  placeholder={autoName}
+                  maxLength={100}
+                  spellCheck={false}
+                />
+                <span
+                  className="muted suffix"
+                  title="A short content hash is added so browsers never show an outdated copy and different images never collide."
+                >
+                  -‹hash›.{outputExtension || 'webp'}
+                </span>
+              </span>
+              {nameCheck.error ? (
+                <span id="mmm-name-help" className="field-error">
+                  {nameCheck.error}
+                </span>
+              ) : nameCheck.notes.length > 0 ? (
+                <span id="mmm-name-help" className="field-note">
+                  Saved as <code>{finalName}</code>. {nameCheck.notes.join(' ')}
+                </span>
+              ) : (
+                <span id="mmm-name-help" className="field-note">
+                  Lowercase letters, numbers and hyphens.
+                </span>
+              )}
+              {similar.length > 0 && (
+                <span className="field-warn" role="status">
+                  An image named <code>{finalName}</code> already exists here:{' '}
+                  {similar.map((url, i) => (
+                    <span key={url}>
+                      {i > 0 && ', '}
+                      <code>{url.split('/').pop()}</code>
+                    </span>
+                  ))}
+                  . Saving keeps both (unless it is the same image). Choose another name to tell
+                  them apart.
+                </span>
+              )}
+            </label>
             <label className="field">
               <span className="label">Alt text{mode === 'insert' && <em> (required)</em>}</span>
               <input
@@ -398,14 +589,6 @@ export function ImageDialog({
                 maxLength={500}
               />
             </label>
-
-            <p className="muted hint">
-              To use a different image, drop or paste it ({pasteKey}), or{' '}
-              <button type="button" className="link" onClick={() => input.current?.click()}>
-                choose a file
-              </button>
-              .
-            </p>
           </>
         )}
 
@@ -430,12 +613,8 @@ export function ImageDialog({
           <button type="button" onClick={onCancel} disabled={busy}>
             Cancel
           </button>
-          <button
-            type="submit"
-            className="primary"
-            disabled={!file || busy || (mode === 'insert' && !alt.trim())}
-          >
-            {busy ? 'Saving…' : mode === 'insert' ? 'Insert' : 'Replace'}
+          <button type="submit" className="primary" disabled={!canSubmit}>
+            {busy ? 'Saving…' : mode === 'insert' ? 'Insert' : 'Save'}
           </button>
         </footer>
       </form>

@@ -257,6 +257,9 @@ importers:
 
   packages/ui:
     dependencies:
+      '@mdx-media-manager/core':
+        specifier: workspace:*
+        version: link:../core
       react-image-crop:
         specifier: ^11.1.2
         version: 11.1.2(react@19.3.0)

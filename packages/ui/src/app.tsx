@@ -23,7 +23,7 @@ function writeEnabled(value: boolean): void {
 
 type Task =
   | { kind: 'insert'; tag: SourceTag; position: 'before' | 'after' }
-  | { kind: 'replace'; image: ImageTarget };
+  | { kind: 'edit'; image: ImageTarget };
 
 interface Toast {
   tone: 'ok' | 'error';
@@ -143,17 +143,28 @@ export function App({ basePath, host }: { basePath: string; host: HTMLElement })
 
   function submit(result: DialogResult) {
     if (!task) return;
-    const options = { alt: result.alt, crop: result.crop, output: result.output };
+    const { tag, url } = task.kind === 'edit' ? task.image : { tag: task.tag, url: '' };
     if (task.kind === 'insert') {
-      void run(() => api.insert(task.tag, task.position, result.file, options), 'Image inserted.');
+      const options = {
+        alt: result.alt ?? '',
+        name: result.name,
+        crop: result.crop,
+        output: result.output,
+      };
+      void run(() => api.insert(tag, task.position, result.file!, options), 'Image inserted.');
+    } else if (result.file) {
+      const options = {
+        alt: result.alt,
+        name: result.name,
+        crop: result.crop,
+        output: result.output,
+      };
+      void run(() => api.replace(tag, url, result.file!, options), 'Image updated.');
     } else {
+      // Only the name and/or alt text changed: no re-encoding.
       void run(
-        () =>
-          api.replace(task.image.tag, task.image.url, result.file, {
-            ...options,
-            alt: result.alt || undefined,
-          }),
-        'Image replaced.',
+        () => api.update(tag, url, { alt: result.alt, name: result.name }),
+        'Image updated.',
       );
     }
   }
@@ -209,9 +220,9 @@ export function App({ basePath, host }: { basePath: string; host: HTMLElement })
           <button
             type="button"
             disabled={!status || busy}
-            onClick={() => setTask({ kind: 'replace', image })}
+            onClick={() => setTask({ kind: 'edit', image })}
           >
-            Replace
+            Edit
           </button>
           <button
             type="button"
@@ -228,7 +239,16 @@ export function App({ basePath, host }: { basePath: string; host: HTMLElement })
         <ImageDialog
           mode={task.kind}
           defaults={status.image}
-          alt={task.kind === 'replace' ? (task.image.element.alt ?? '') : ''}
+          findSimilar={(name) =>
+            task.kind === 'edit'
+              ? api.similarNames(task.image.tag, name, task.image.url)
+              : api.similarNames(task.tag, name)
+          }
+          current={
+            task.kind === 'edit'
+              ? { url: task.image.url, alt: task.image.element.getAttribute('alt') ?? '' }
+              : undefined
+          }
           busy={busy}
           error={error}
           onSubmit={submit}
@@ -244,7 +264,7 @@ export function App({ basePath, host }: { basePath: string; host: HTMLElement })
         onClick={toggle}
         title={
           offline ??
-          (enabled ? 'Hover content to add, replace or delete images' : 'Image manager is off')
+          (enabled ? 'Hover content to add, edit or delete images' : 'Image manager is off')
         }
       >
         <span className="dot" />

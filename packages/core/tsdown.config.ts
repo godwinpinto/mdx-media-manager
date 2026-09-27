@@ -6,5 +6,5 @@ export default defineConfig({
   target: 'es2023',
   format: 'esm',
   platform: 'node',
-  entry: ['src/index.ts', 'src/node.ts', 'src/mdx/index.ts'],
+  entry: ['src/index.ts', 'src/node.ts', 'src/mdx/index.ts', 'src/slug.ts'],
 });

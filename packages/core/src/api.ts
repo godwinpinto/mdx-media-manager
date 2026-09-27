@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { z } from 'zod';
@@ -61,11 +62,15 @@ const source = {
   hash: z.string().min(1).max(64),
 };
 
+/** File name without extension; slugified, and a content hash is appended */
+const name = z.string().trim().min(1).max(100).optional();
+
 export const insertMeta = z.object({
   ...source,
   target,
   position: z.enum(['before', 'after']),
   alt: z.string().max(500),
+  name,
   crop,
   output,
 });
@@ -74,15 +79,33 @@ export const replaceMeta = z.object({
   ...source,
   image: imageRef,
   alt: z.string().max(500).optional(),
+  name,
   crop,
   output,
 });
 
+/** Rename an image and/or change its alt text, keeping the image data as is */
+export const updateBody = z.object({
+  ...source,
+  image: imageRef,
+  alt: z.string().max(500).optional(),
+  name,
+});
+
 export const deleteBody = z.object({ ...source, image: imageRef });
+
+export const namesQuery = z.object({
+  file: source.file,
+  name: z.string().trim().min(1).max(100),
+  /** The image being renamed, if any */
+  url: z.string().max(2048).optional(),
+});
 
 export type InsertMeta = z.infer<typeof insertMeta>;
 export type ReplaceMeta = z.infer<typeof replaceMeta>;
+export type UpdateBody = z.infer<typeof updateBody>;
 export type DeleteBody = z.infer<typeof deleteBody>;
+export type NamesQuery = z.infer<typeof namesQuery>;
 
 export interface EditResponse {
   /** Source file that was edited */
@@ -141,7 +164,7 @@ function createOperations(options: ResolvedOptions) {
   async function storeImage(
     sourceFile: string,
     file: File,
-    meta: { crop?: z.infer<typeof crop>; output?: z.infer<typeof output> },
+    meta: { name?: string; crop?: z.infer<typeof crop>; output?: z.infer<typeof output> },
   ) {
     if (file.size > options.maxUploadSize)
       throw new EditError('INVALID', 'The upload is too large.');
@@ -150,8 +173,11 @@ function createOperations(options: ResolvedOptions) {
       ...meta.output,
       crop: meta.crop,
     });
-    const name = `${slugify(path.parse(file.name).name)}-${processed.hash}.${extensionOf(processed.format)}`;
-    const imageFile = path.join(imageFolderFor(options, sourceFile), name);
+    const base = slugify(meta.name ?? path.parse(file.name).name);
+    const imageFile = path.join(
+      imageFolderFor(options, sourceFile),
+      `${base}-${processed.hash}.${extensionOf(processed.format)}`,
+    );
     if (!isInside(options.publicDir, imageFile))
       throw new EditError('INVALID', 'Invalid image location.');
 
@@ -174,6 +200,33 @@ function createOperations(options: ResolvedOptions) {
     if (await isReferenced(options.root, options.publicDir, url)) return;
     await fs.rm(file, { force: true });
     return url;
+  }
+
+  /**
+   * Copy an image in `publicDir` to `<name>-<content hash>.<ext>` in the same folder. The old file
+   * stays until nothing references it, so other pages using it keep working.
+   */
+  async function renameImage(url: string, name: string) {
+    const current = publicFileOf(options.publicDir, url);
+    if (!current || !existsSync(current)) {
+      throw new EditError('UNSUPPORTED', 'Only images stored in the public folder can be renamed.');
+    }
+    const data = await fs.readFile(current);
+    const hash = createHash('sha256').update(data).digest('hex').slice(0, 8);
+    const target = path.join(
+      path.dirname(current),
+      `${slugify(name)}-${hash}${path.extname(current).toLowerCase()}`,
+    );
+    if (!isInside(options.publicDir, target))
+      throw new EditError('INVALID', 'Invalid image location.');
+    if (target === current) return { url, discard: undefined };
+
+    const created = !existsSync(target);
+    if (created) await writeAtomic(target, data);
+    return {
+      url: publicUrlOf(options.publicDir, target),
+      discard: () => (created ? fs.rm(target, { force: true }) : Promise.resolve()),
+    };
   }
 
   async function commit(sourceFile: string, next: string, discard?: () => Promise<unknown>) {
@@ -249,6 +302,57 @@ function createOperations(options: ResolvedOptions) {
       });
     },
 
+    async update(body: UpdateBody): Promise<EditResponse> {
+      const sourceFile = await resolveSourceFile(options.root, body.file);
+      return withFileLock(sourceFile, async () => {
+        const text = await readSource(sourceFile, body.hash);
+        const format = formatOf(sourceFile);
+        const previous = findImageUrl(text, body.image, format);
+        if (!previous) throw new EditError('UNSUPPORTED', 'This image has no editable URL.');
+
+        let url = previous;
+        let discard: (() => Promise<unknown>) | undefined;
+        if (body.name !== undefined) {
+          const renamed = await renameImage(previous, body.name);
+          url = renamed.url;
+          discard = renamed.discard;
+        }
+
+        const next = replaceImage(text, { image: body.image, url, alt: body.alt }, format);
+        if (next === text) return { file: body.file, hash: body.hash, url };
+        const hash = await commit(sourceFile, next, discard);
+        const removed = url !== previous ? await removeIfOrphaned(previous) : undefined;
+        return { file: body.file, hash, url, removed };
+      });
+    },
+
+    /**
+     * Images in the destination folder that already use `name` (any content hash). Used to warn
+     * about look-alike names; files never collide because the hash is part of the name.
+     */
+    async similarNames(query: NamesQuery): Promise<{ matches: string[] }> {
+      const sourceFile = await resolveSourceFile(options.root, query.file);
+      // Renames stay in the image's folder; new images go to the page's folder.
+      const currentFile = query.url ? publicFileOf(options.publicDir, query.url) : undefined;
+      const folder = currentFile ? path.dirname(currentFile) : imageFolderFor(options, sourceFile);
+      if (folder !== options.publicDir && !isInside(options.publicDir, folder))
+        return { matches: [] };
+
+      const slug = slugify(query.name);
+      const entries = await fs.readdir(folder).catch(() => [] as string[]);
+      const matches = entries
+        .filter((entry) => {
+          const base = path.parse(entry).name;
+          return (
+            base === slug ||
+            (base.startsWith(`${slug}-`) && /^[0-9a-f]{8}$/.test(base.slice(slug.length + 1)))
+          );
+        })
+        .map((entry) => publicUrlOf(options.publicDir, path.join(folder, entry)))
+        .filter((url) => url !== query.url);
+      return { matches };
+    },
+
     async delete(body: DeleteBody): Promise<EditResponse> {
       const sourceFile = await resolveSourceFile(options.root, body.file);
       return withFileLock(sourceFile, async () => {
@@ -278,6 +382,13 @@ export function createMediaManager(input: MediaManagerOptions = {}) {
           maxUploadSize: options.maxUploadSize,
         }),
       },
+      '/images/names': {
+        method: 'GET',
+        handle: ({ request }) =>
+          operations.similarNames(
+            namesQuery.parse(Object.fromEntries(new URL(request.url).searchParams)),
+          ),
+      },
       '/images/insert': {
         method: 'POST',
         handle: ({ body }) => {
@@ -291,6 +402,10 @@ export function createMediaManager(input: MediaManagerOptions = {}) {
           const { file, meta } = readUpload(body, replaceMeta);
           return operations.replace(file, meta);
         },
+      },
+      '/images/update': {
+        method: 'POST',
+        handle: ({ body }) => operations.update(updateBody.parse(body)),
       },
       '/images/delete': {
         method: 'POST',
