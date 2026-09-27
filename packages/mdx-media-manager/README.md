@@ -4,14 +4,29 @@ Add, replace and delete images in your MDX docs **from the rendered page**, whil
 server. Images are cropped, resized and converted (WebP by default) and written to `public/`, and
 the `.mdx` source is edited in place, so hot reload shows the result immediately.
 
-Development only: outside `next dev` the integration returns your config untouched, so production
+Development only: outside your dev server (`next dev`, `vite dev`) nothing is added, so production
 builds contain none of it.
 
-## Setup (Next.js + Fumadocs)
+## Setup
+
+In your app's folder:
 
 ```bash
-pnpm add -D mdx-media-manager
+npx mdx-media-manager init
 ```
+
+It detects Next.js (`next.config.*`) or Vite (`vite.config.*`, e.g. TanStack Start), adds the package
+as a devDependency with your package manager, and edits the config file for you. Options:
+`--dry-run` to preview, `--no-install`, `--cwd <dir>`, `--framework next|vite`. Running it again is
+safe.
+
+That's it: no route files, no components to add. Start your dev server and hover your docs.
+
+### What it writes: Next.js
+
+A small helper that loads the package only in `next dev`, so production builds and `next start`
+never need it (it can stay a devDependency even when production installs skip them). It works in
+`next.config.mjs`, `.js`, `.cjs` and `.ts` (typed there):
 
 ```js
 // next.config.mjs
@@ -19,19 +34,40 @@ import { createMDX } from 'fumadocs-mdx/next';
 
 const withMDX = createMDX();
 
-// Loaded only by `next dev`, so production (`next build` / `next start`) never needs the package.
-const withMediaManager =
-  process.env.NODE_ENV === 'development'
-    ? (await import('mdx-media-manager/next')).withMdxMediaManager
-    : (config) => config;
+/** @type {import('next').NextConfig} */
+const config = {
+  reactStrictMode: true,
+};
 
-export default withMediaManager(withMDX({ reactStrictMode: true }));
+// mdx-media-manager: edit images from the rendered page. Loaded only by `next dev`,
+// so production builds and `next start` never need the package.
+const withMediaManager = (input) => async (phase, context) => {
+  if (phase === 'phase-development-server') {
+    const { withMdxMediaManager } = await import('mdx-media-manager/next');
+    return withMdxMediaManager(input)(phase, context);
+  }
+  return typeof input === 'function' ? input(phase, context) : input;
+};
+
+export default withMediaManager(withMDX(config));
 ```
 
-The package can stay a devDependency: production installs without devDependencies still work,
-because the import only runs in development.
+### What it writes: Vite / TanStack Start
 
-That's it: no route files, no components to add. Run `next dev` and hover your docs.
+```ts
+// vite.config.ts
+import { mdxMediaManager } from 'mdx-media-manager/vite';
+
+export default defineConfig({
+  plugins: [mdxMediaManager(), fumadocsMdx(), tanstackStart(), react()],
+});
+```
+
+The plugins only apply to `vite dev` (`apply: 'serve'`): the API is mounted on Vite's dev server
+and compiled MDX is tagged in a late `transform`. Builds contain none of it, and the production
+server never loads `vite.config.ts`.
+
+## Using it
 
 - **Insert**: hover any block (paragraphs, headings, lists, code, tables, and content inside
   components like `<Callout>` or `<Tab>`), then click **+ Image above/below**.
@@ -45,15 +81,18 @@ still mentions it.
 
 ## Options
 
+Pass them as the second argument of `withMdxMediaManager(config, options)` or to
+`mdxMediaManager(options)`:
+
 ```js
-withMdxMediaManager(config, {
+{
   contentDir: 'content/docs', // default: content/docs, else content
   publicDir: 'public',
   imagesDir: 'images', // inside publicDir
   image: { format: 'webp', quality: 82, maxWidth: 1600 },
   maxUploadSize: 25 * 1024 * 1024,
   allowedHosts: [], // extra hostnames besides localhost, e.g. a LAN name
-});
+}
 ```
 
 ## How it works
@@ -69,22 +108,6 @@ withMdxMediaManager(config, {
 
 The API only answers local requests (localhost host and origin, plus a custom header), refuses
 paths outside the project, and re-encodes every upload.
-
-## Setup (TanStack Start / Vite)
-
-```ts
-// vite.config.ts
-import { fumadocsMdx } from 'fumadocs-mdx/vite';
-import { mdxMediaManager } from 'mdx-media-manager/vite';
-
-export default defineConfig({
-  plugins: [mdxMediaManager(), fumadocsMdx(), tanstackStart(), react()],
-});
-```
-
-The plugins only apply to `vite dev` (`apply: 'serve'`): the API is mounted on Vite's dev server
-and compiled MDX is tagged in a late `transform`. Builds contain none of it, and the production
-server never loads `vite.config.ts`. It takes the same options as the Next.js integration.
 
 ## Other frameworks
 

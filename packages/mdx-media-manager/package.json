@@ -12,6 +12,9 @@
     "vite"
   ],
   "license": "MIT",
+  "bin": {
+    "mdx-media-manager": "./dist/cli.js"
+  },
   "files": [
     "dist"
   ],
@@ -37,7 +40,8 @@
     "@mdx-media-manager/core": "workspace:*",
     "@mdx-media-manager/ui": "workspace:*",
     "acorn": "^8.18.0",
-    "magic-string": "^1.4.2"
+    "magic-string": "^1.4.2",
+    "oxc-parser": "^0.151.0"
   },
   "devDependencies": {
     "@mdx-js/mdx": "^3.1.1",
