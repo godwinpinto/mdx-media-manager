@@ -9,3 +9,19 @@ next-env.d.ts
 .DS_Store
 .env*.local
 coverage
+
+# env files hold secrets (S3 keys); examples are committed
+.env
+.env.*
+!.env.example
+
+# build output and caches from other tools
+.vercel
+.output
+.nitro
+.tanstack
+.cache
+
+# logs and keys
+*.log
+*.pem
