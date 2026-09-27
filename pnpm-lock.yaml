@@ -88,7 +88,7 @@ importers:
         specifier: ^7.0.2
         version: 7.0.2
 
-  apps/tanstack:
+  apps/tanstack-start:
     dependencies:
       '@tanstack/react-router':
         specifier: 1.170.38
