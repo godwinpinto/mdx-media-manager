@@ -100,7 +100,9 @@ hover to replace or remove. Production builds still fail on broken references, a
 ### File names
 
 Images go to `public/images/<page path>/<name>-<hash>.<ext>` and are referenced as
-`![alt](/images/…)`.
+`![alt](/images/…)`. The page path is relative to `content/`, so every collection gets its own
+folder: `content/docs/guide.mdx` → `images/docs/guide/`, `content/blog/hello.mdx` →
+`images/blog/hello/`.
 
 - Names are URL- and file-system-friendly: lowercase `a–z`, `0–9` and single hyphens, at most 60
   characters. Accents are removed (`Café` → `cafe`), and characters outside the Latin alphabet are
@@ -111,6 +113,21 @@ Images go to `public/images/<page path>/<name>-<hash>.<ext>` and are referenced 
 - A replaced, renamed or deleted image file is removed only when no other project file still
   mentions it.
 
+### Multiple collections and shared content
+
+Every local MDX collection works: `defineDocs` / `defineCollections` in the same app (docs, blog,
+changelog, …) are tagged, editable and part of the library.
+
+Content outside the app, such as a `shared/docs` package in a monorepo or Fumadocs `workspaces`, is
+editable too. `dir` values written as plain strings in `defineDocs`, `defineCollections` or
+`defineConfig({ workspaces })` are detected automatically. Add others with `contentRoots`. Only
+`.md`/`.mdx` files in those folders can be edited, and their images go to
+`images/<folder name>/<page>`.
+
+Not supported: generated or remote content (OpenAPI pages, remote MDX, CMS sources), since there is
+no local file to edit. Collections compiled with Fumadocs' experimental `compiler: 'satteri'`
+haven't been tested.
+
 ## Options
 
 Pass them as the second argument of `withMdxMediaManager(config, options)` or to
@@ -118,7 +135,8 @@ Pass them as the second argument of `withMdxMediaManager(config, options)` or to
 
 ```js
 {
-  contentDir: 'content/docs', // default: content/docs, else content
+  contentDir: 'content', // image folders are named relative to this; default: content, else root
+  contentRoots: ['../../shared/docs'], // extra content folders outside the app (auto-detected from Fumadocs)
   publicDir: 'public',
   imagesDir: 'images', // inside publicDir
   image: { format: 'webp', quality: 82, maxWidth: 1600 },

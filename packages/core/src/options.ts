@@ -17,9 +17,16 @@ export interface MediaManagerOptions {
   root?: string;
   /**
    * Folder with your MDX content, relative to `root`. Image folders are named after a page's
-   * path inside it. @defaultValue 'content/docs' when it exists, otherwise 'content'
+   * path inside it, so each collection gets its own: `images/docs/…`, `images/blog/…`.
+   * @defaultValue 'content' when it exists, otherwise the project root
    */
   contentDir?: string;
+  /**
+   * Extra folders with MDX content outside the project (e.g. Fumadocs `workspaces` or a shared
+   * docs package in a monorepo), relative to `root` or absolute. Only `.md`/`.mdx` files in them
+   * can be edited. The Next.js and Vite integrations add the ones found in your Fumadocs config.
+   */
+  contentRoots?: string[];
   /** Static folder served at `/`, relative to `root`. @defaultValue 'public' */
   publicDir?: string;
   /** Folder inside `publicDir` that images are written to. @defaultValue 'images' */
@@ -42,6 +49,7 @@ export interface MediaManagerOptions {
 export interface ResolvedOptions {
   root: string;
   contentDir: string;
+  contentRoots: string[];
   publicDir: string;
   imagesDir: string;
   basePath: string;
@@ -54,14 +62,17 @@ export function resolveOptions(options: MediaManagerOptions = {}): ResolvedOptio
   const root = path.resolve(options.root ?? process.cwd());
   const contentDir = path.resolve(
     root,
-    options.contentDir ??
-      (existsSync(path.join(root, 'content/docs')) ? 'content/docs' : 'content'),
+    options.contentDir ?? (existsSync(path.join(root, 'content')) ? 'content' : '.'),
   );
+  const contentRoots = [
+    ...new Set((options.contentRoots ?? []).map((dir) => path.resolve(root, dir))),
+  ];
   const publicDir = path.resolve(root, options.publicDir ?? 'public');
 
   return {
     root,
     contentDir,
+    contentRoots,
     publicDir,
     imagesDir: path.resolve(publicDir, options.imagesDir ?? 'images'),
     basePath: (options.basePath ?? '/__mdx-media').replace(/\/$/, ''),

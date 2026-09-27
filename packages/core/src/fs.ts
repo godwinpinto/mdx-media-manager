@@ -14,16 +14,32 @@ export function isInside(dir: string, file: string): boolean {
  * Resolve a project-relative source path from the client, refusing anything outside `root`,
  * inside `node_modules`, reached through a symlink, or that isn't `.md`/`.mdx`.
  */
-export async function resolveSourceFile(root: string, relativePath: string): Promise<string> {
+/** Folders whose `.md`/`.mdx` files may be edited: the project, plus extra content roots */
+export interface ContentScope {
+  root: string;
+  contentRoots: string[];
+}
+
+/** The allowed folder containing `file`, if any */
+export function scopeOf(scope: ContentScope, file: string): string | undefined {
+  return [scope.root, ...scope.contentRoots].find((dir) => isInside(dir, file));
+}
+
+/**
+ * Resolve a source path from the client (relative to the project root; `../` is fine for content
+ * roots outside it). Refuses anything outside the allowed folders, inside `node_modules`, reached
+ * through a symlink, or that isn't `.md`/`.mdx`.
+ */
+export async function resolveSourceFile(
+  scope: ContentScope,
+  relativePath: string,
+): Promise<string> {
   if (relativePath.includes('\0') || path.isAbsolute(relativePath)) {
     throw new EditError('INVALID', 'Invalid source path.');
   }
-  const file = path.resolve(root, relativePath);
-  if (
-    !isInside(root, file) ||
-    !/\.mdx?$/.test(file) ||
-    file.split(path.sep).includes('node_modules')
-  ) {
+  const file = path.resolve(scope.root, relativePath);
+  const base = scopeOf(scope, file);
+  if (!base || !/\.mdx?$/.test(file) || file.split(path.sep).includes('node_modules')) {
     throw new EditError('INVALID', 'Source path is outside the project content.');
   }
   let real: string;
@@ -32,7 +48,7 @@ export async function resolveSourceFile(root: string, relativePath: string): Pro
   } catch {
     throw new EditError('NOT_FOUND', `Source file not found: ${relativePath}`);
   }
-  if (real !== path.join(await fs.realpath(root), path.relative(root, file))) {
+  if (real !== path.join(await fs.realpath(base), path.relative(base, file))) {
     throw new EditError('INVALID', 'Symlinked source files are not supported.');
   }
   return file;
@@ -99,12 +115,26 @@ export async function* projectFiles(dir: string, skip: string): AsyncGenerator<s
   }
 }
 
+/** Project files, then the `.md`/`.mdx` files of content roots outside the project */
+export async function* scopeFiles(scope: ContentScope, skip: string): AsyncGenerator<string> {
+  yield* projectFiles(scope.root, skip);
+  for (const dir of scope.contentRoots) {
+    if (isInside(scope.root, dir)) continue;
+    for await (const file of projectFiles(dir, skip)) if (/\.mdx?$/.test(file)) yield file;
+  }
+}
+
 /**
  * Whether any project file (content, pages, components, config) still mentions `url`.
  * Deliberately a plain text search: a false positive only keeps a file around.
  */
-export async function isReferenced(root: string, publicDir: string, url: string): Promise<boolean> {
-  for await (const file of projectFiles(root, publicDir)) {
+export async function isReferenced(
+  root: string,
+  publicDir: string,
+  url: string,
+  contentRoots: string[] = [],
+): Promise<boolean> {
+  for await (const file of scopeFiles({ root, contentRoots }, publicDir)) {
     const text = await fs.readFile(file, 'utf8').catch(() => '');
     if (text.includes(url)) return true;
   }
@@ -126,14 +156,28 @@ export function publicUrlOf(publicDir: string, file: string): string {
 export { slugify } from './slug';
 
 /** Folder for a page's images: `<imagesDir>/<page path inside contentDir>` */
+/**
+ * Folder for a page's images: `<imagesDir>/<page path inside contentDir>`, e.g.
+ * `content/blog/hello.mdx` → `images/blog/hello`. Pages in an extra content root use the root's
+ * folder name: `../../shared/handbook/intro.mdx` → `images/handbook/intro`.
+ */
 export function imageFolderFor(
-  options: { root: string; contentDir: string; imagesDir: string },
+  options: { root: string; contentDir: string; imagesDir: string; contentRoots?: string[] },
   sourceFile: string,
 ): string {
-  const base = isInside(options.contentDir, sourceFile) ? options.contentDir : options.root;
-  const page = path.relative(base, sourceFile).replace(/\.mdx?$/, '');
-  const segments = page.split(path.sep).map(slugify);
-  return path.join(options.imagesDir, ...segments);
+  let segments: string[];
+  if (isInside(options.contentDir, sourceFile)) {
+    segments = path.relative(options.contentDir, sourceFile).split(path.sep);
+  } else {
+    const external = options.contentRoots?.find(
+      (dir) => !isInside(options.root, dir) && isInside(dir, sourceFile),
+    );
+    segments = external
+      ? [path.basename(external), ...path.relative(external, sourceFile).split(path.sep)]
+      : path.relative(options.root, sourceFile).split(path.sep);
+  }
+  segments[segments.length - 1] = segments.at(-1)!.replace(/\.mdx?$/, '');
+  return path.join(options.imagesDir, ...segments.map(slugify));
 }
 
 export { existsSync };

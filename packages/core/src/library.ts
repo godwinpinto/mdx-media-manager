@@ -5,7 +5,8 @@ import {
   existsSync,
   isInside,
   isReferenced,
-  projectFiles,
+  scopeFiles,
+  scopeOf,
   publicFileOf,
   publicUrlOf,
   withFileLock,
@@ -40,6 +41,8 @@ export interface LibraryImage {
   url: string;
   /** File name */
   name: string;
+  /** Path to show: relative to the images folder when managed (`blog/hello/cover.webp`), else the URL */
+  label: string;
   /** Bytes */
   size: number;
   width?: number;
@@ -148,7 +151,7 @@ export function createLibrary(
     const errors: LibraryScan['errors'] = [];
     const otherFiles: { file: string; text: string }[] = [];
 
-    for await (const file of projectFiles(options.root, options.publicDir)) {
+    for await (const file of scopeFiles(options, options.publicDir)) {
       const text = await fs.readFile(file, 'utf8').catch(() => undefined);
       if (text === undefined) continue;
       const rel = relative(file);
@@ -159,7 +162,10 @@ export function createLibrary(
 
       const page = pageUrl(rel);
       // READMEs and similar still count as usages, but aren't pages to filter by.
-      if (page || isInside(options.contentDir, file)) pages.push({ file: rel, pageUrl: page });
+      const external = scopeOf(options, file) !== options.root;
+      if (page || external || isInside(options.contentDir, file)) {
+        pages.push({ file: rel, pageUrl: page });
+      }
       let usages;
       try {
         usages = listImageUsages(text, formatOf(file));
@@ -197,6 +203,9 @@ export function createLibrary(
       images.push({
         url,
         name: path.basename(file),
+        label: isInside(options.imagesDir, file)
+          ? path.relative(options.imagesDir, file).split(path.sep).join('/')
+          : url,
         size: meta.size,
         width: meta.width,
         height: meta.height,
@@ -304,7 +313,7 @@ export function createLibrary(
           });
         } else if (!existsSync(file)) {
           skipped.push({ url, reason: 'Already gone.' });
-        } else if (await isReferenced(options.root, options.publicDir, url)) {
+        } else if (await isReferenced(options.root, options.publicDir, url, options.contentRoots)) {
           skipped.push({ url, reason: 'Still used.' });
         } else {
           await fs.rm(file, { force: true });

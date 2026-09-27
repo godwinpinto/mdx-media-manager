@@ -91,7 +91,7 @@ export function ImageGrid({
             <span className="thumb">
               <img src={image.url} alt="" loading="lazy" decoding="async" />
             </span>
-            <span className="card-name">{image.url.split('/').slice(-2).join('/')}</span>
+            <span className="card-name">{image.label}</span>
             <span className="card-meta muted">
               {image.width && image.height ? `${image.width}×${image.height} · ` : ''}
               {formatBytes(image.size)}

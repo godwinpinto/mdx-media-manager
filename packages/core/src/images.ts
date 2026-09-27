@@ -6,7 +6,7 @@ import { EditError } from './mdx/errors';
 import type { ResolvedOptions } from './options';
 import { slugify } from './slug';
 
-type Paths = Pick<ResolvedOptions, 'root' | 'publicDir' | 'imagesDir'>;
+type Paths = Pick<ResolvedOptions, 'root' | 'publicDir' | 'imagesDir' | 'contentRoots'>;
 
 /** Delete an image file we manage once no project file mentions it. */
 export async function removeIfOrphaned(
@@ -16,7 +16,7 @@ export async function removeIfOrphaned(
   if (!url) return;
   const file = publicFileOf(options.publicDir, url);
   if (!file || !isInside(options.imagesDir, file) || !existsSync(file)) return;
-  if (await isReferenced(options.root, options.publicDir, url)) return;
+  if (await isReferenced(options.root, options.publicDir, url, options.contentRoots)) return;
   await fs.rm(file, { force: true });
   return url;
 }

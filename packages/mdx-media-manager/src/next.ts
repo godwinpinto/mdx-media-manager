@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 import type { NextConfig } from 'next';
 import type { MediaManagerOptions } from '@mdx-media-manager/core';
 import type { LoaderOptions } from './loader';
@@ -107,14 +108,21 @@ export function withMdxMediaManager(
     }
 
     const { resolveOptions } = await import('@mdx-media-manager/core');
-    const resolvedOptions = resolveOptions(options);
-    const serverUrl = await ensureServer(options);
+    const { detectContentRoots } = await import('./fumadocs');
+    const root = options.root ?? process.cwd();
+    const serverOptions = {
+      ...options,
+      contentRoots: [...detectContentRoots(root), ...(options.contentRoots ?? [])],
+    };
+    const resolvedOptions = resolveOptions(serverOptions);
+    const serverUrl = await ensureServer(serverOptions);
     const names = options.loaders ?? defaultLoaders;
     const base = {
       root: resolvedOptions.root,
       publicDir: resolvedOptions.publicDir,
       basePath: resolvedOptions.basePath,
-      clientModule: 'mdx-media-manager/client',
+      // By file path: MDX files outside the app (shared content) can't resolve the package name.
+      clientModule: fileURLToPath(new URL('./client.js', import.meta.url)),
     };
 
     const ours = [

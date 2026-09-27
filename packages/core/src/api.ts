@@ -228,7 +228,7 @@ function createOperations(options: ResolvedOptions) {
 
   return {
     async insert(file: File, meta: InsertMeta): Promise<EditResponse> {
-      const sourceFile = await resolveSourceFile(options.root, meta.file);
+      const sourceFile = await resolveSourceFile(options, meta.file);
       return withFileLock(sourceFile, async () => {
         const text = await readSource(sourceFile, meta.hash);
         // Validate the target before doing any image work.
@@ -263,7 +263,7 @@ function createOperations(options: ResolvedOptions) {
 
     /** Place an image that is already in the public folder (from the library). */
     async insertExisting(body: InsertExistingBody): Promise<EditResponse> {
-      const sourceFile = await resolveSourceFile(options.root, body.file);
+      const sourceFile = await resolveSourceFile(options, body.file);
       const imageFile = publicFileOf(options.publicDir, body.url);
       if (!imageFile || !existsSync(imageFile)) {
         throw new EditError('NOT_FOUND', `Image not found in the public folder: ${body.url}`);
@@ -280,7 +280,7 @@ function createOperations(options: ResolvedOptions) {
     },
 
     async replace(file: File, meta: ReplaceMeta): Promise<EditResponse> {
-      const sourceFile = await resolveSourceFile(options.root, meta.file);
+      const sourceFile = await resolveSourceFile(options, meta.file);
       return withFileLock(sourceFile, async () => {
         const text = await readSource(sourceFile, meta.hash);
         const format = formatOf(sourceFile);
@@ -308,7 +308,7 @@ function createOperations(options: ResolvedOptions) {
     },
 
     async update(body: UpdateBody): Promise<EditResponse> {
-      const sourceFile = await resolveSourceFile(options.root, body.file);
+      const sourceFile = await resolveSourceFile(options, body.file);
       return withFileLock(sourceFile, async () => {
         const text = await readSource(sourceFile, body.hash);
         const format = formatOf(sourceFile);
@@ -340,7 +340,7 @@ function createOperations(options: ResolvedOptions) {
       const currentFile = query.url ? publicFileOf(options.publicDir, query.url) : undefined;
       const folder = currentFile
         ? path.dirname(currentFile)
-        : imageFolderFor(options, await resolveSourceFile(options.root, query.file!));
+        : imageFolderFor(options, await resolveSourceFile(options, query.file!));
       if (folder !== options.publicDir && !isInside(options.publicDir, folder))
         return { matches: [] };
 
@@ -360,7 +360,7 @@ function createOperations(options: ResolvedOptions) {
     },
 
     async delete(body: DeleteBody): Promise<EditResponse> {
-      const sourceFile = await resolveSourceFile(options.root, body.file);
+      const sourceFile = await resolveSourceFile(options, body.file);
       return withFileLock(sourceFile, async () => {
         const text = await readSource(sourceFile, body.hash);
         const format = formatOf(sourceFile);

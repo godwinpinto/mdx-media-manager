@@ -75,7 +75,7 @@ describe('insert', () => {
     });
     expect(res.status).toBe(200);
     const body = (await res.json()) as any;
-    expect(body.url).toMatch(/^\/images\/page\/my-photo-[0-9a-f]{8}\.webp$/);
+    expect(body.url).toMatch(/^\/images\/docs\/page\/my-photo-[0-9a-f]{8}\.webp$/);
     expect(body.hash).toBe(hashSource(await read()));
     expect(await read()).toContain(`  Inside callout.\n\n  ![A photo](${body.url})\n</Callout>`);
 
@@ -195,7 +195,7 @@ describe('naming and update', () => {
 
   it('uses the given name (slugified) for new images', async () => {
     const { url } = await insertNamed('Team Photo 2024!');
-    expect(url).toMatch(/^\/images\/page\/team-photo-2024-[0-9a-f]{8}\.webp$/);
+    expect(url).toMatch(/^\/images\/docs\/page\/team-photo-2024-[0-9a-f]{8}\.webp$/);
   });
 
   it('renames an image without re-encoding it and removes the old file', async () => {
@@ -210,7 +210,7 @@ describe('naming and update', () => {
     });
     expect(res.status).toBe(200);
     const body = (await res.json()) as any;
-    expect(body.url).toMatch(/^\/images\/page\/hero-[0-9a-f]{8}\.webp$/);
+    expect(body.url).toMatch(/^\/images\/docs\/page\/hero-[0-9a-f]{8}\.webp$/);
     expect(body.removed).toBe(first.url);
     expect(await fs.readFile(path.join(root, 'public', body.url))).toEqual(before);
     expect(await read()).toContain(`![New alt](${body.url})`);
@@ -275,7 +275,7 @@ describe('naming and update', () => {
       name: 'hero',
     });
     expect(((await res.json()) as any).url).toBe(first.url);
-    expect(await fs.readdir(path.join(root, 'public/images/page'))).toHaveLength(1);
+    expect(await fs.readdir(path.join(root, 'public/images/docs/page'))).toHaveLength(1);
   });
 
   it('renaming onto a name used by a different image keeps both files', async () => {

@@ -24,7 +24,7 @@ export interface TransformOptions {
   root: string;
   /** Static folder, used to turn image imports back into URLs */
   publicDir: string;
-  /** Module that exports `MediaManagerOverlay` */
+  /** Module that exports `MediaManagerOverlay`: a package specifier, or an absolute file path */
   clientModule: string;
   basePath: string;
   /** Original URLs of images replaced by `placeholderFile`, in document order */
@@ -258,9 +258,18 @@ function injectOverlay(ast: AnyNode, s: MagicString, options: TransformOptions):
   }
 
   const props = JSON.stringify({ basePath: options.basePath });
+  // A file path becomes relative to the MDX file (bundlers treat `/abs` as project-relative).
+  let clientModule = options.clientModule;
+  if (path.isAbsolute(clientModule)) {
+    clientModule = path
+      .relative(path.dirname(options.resourcePath), clientModule)
+      .split(path.sep)
+      .join('/');
+    if (!clientModule.startsWith('.')) clientModule = `./${clientModule}`;
+  }
   s.append(`
 import { createElement as __mmm_h, Fragment as __mmm_Fragment } from "react";
-import { MediaManagerOverlay as __mmm_Overlay } from ${JSON.stringify(options.clientModule)};
+import { MediaManagerOverlay as __mmm_Overlay } from ${JSON.stringify(clientModule)};
 export default function MDXContentWithMediaManager(props) {
   return __mmm_h(__mmm_Fragment, null, __mmm_h(${content}, props), __mmm_h(__mmm_Overlay, ${props}));
 }

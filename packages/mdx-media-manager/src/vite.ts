@@ -1,6 +1,8 @@
 import fs from 'node:fs/promises';
+import path from 'node:path';
 import type { MediaManagerOptions } from '@mdx-media-manager/core';
 import type { Plugin } from 'vite';
+import { detectContentRoots } from './fumadocs';
 import { placeholderFile, substituteMissingImages } from './missing';
 import { transformCompiledMdx } from './transform';
 
@@ -28,6 +30,7 @@ export function mdxMediaManager(options: MdxMediaManagerViteOptions = {}): Plugi
   let root = options.root ?? process.cwd();
   let publicDir = '';
   let basePath = '';
+  let contentRoots: string[] = [];
   /** Missing images substituted per file, for the late transform to label */
   const missingByFile = new Map<string, string[]>();
 
@@ -37,12 +40,21 @@ export function mdxMediaManager(options: MdxMediaManagerViteOptions = {}): Plugi
       name: 'mdx-media-manager:api',
       apply: 'serve',
       enforce: 'pre',
+      // MDX files outside the app (shared content) can't resolve the package from where they
+      // are, so resolve the injected overlay import as if it came from the app.
+      resolveId(id, importer) {
+        if (id !== clientModule || !importer) return;
+        const relative = path.relative(root, importer.split('?')[0]!);
+        if (!relative.startsWith('..') && !path.isAbsolute(relative)) return;
+        return this.resolve(id, path.join(root, 'index.js'), { skipSelf: true });
+      },
       config() {
         // Pre-bundle the overlay up front instead of re-optimizing on the first MDX page.
         return { optimizeDeps: { include: [clientModule] } };
       },
       async configResolved(config) {
         root = options.root ?? config.root;
+        contentRoots = [...detectContentRoots(root), ...(options.contentRoots ?? [])];
         const { resolveOptions } = await import('@mdx-media-manager/core');
         const resolved = resolveOptions({
           ...options,
@@ -59,6 +71,7 @@ export function mdxMediaManager(options: MdxMediaManagerViteOptions = {}): Plugi
           createMediaManager({
             ...options,
             root,
+            contentRoots,
             publicDir: options.publicDir ?? server.config.publicDir,
           }).handler,
         );
