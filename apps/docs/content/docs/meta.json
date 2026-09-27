@@ -1,0 +1,25 @@
+{
+  "title": "MDX Media Manager",
+  "pages": [
+    "---Getting Started---",
+    "index",
+    "installation",
+    "nextjs",
+    "tanstack-start",
+    "---Using it---",
+    "editing",
+    "library",
+    "---Guides---",
+    "collections",
+    "s3",
+    "production",
+    "---Reference---",
+    "configuration",
+    "environment-variables",
+    "cli",
+    "http-api",
+    "how-it-works",
+    "security",
+    "troubleshooting"
+  ]
+}

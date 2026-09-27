@@ -1,0 +1,22 @@
+---
+title: Environment variables
+description: Variables MDX Media Manager reads.
+---
+
+All are optional and only read by the dev server. Next.js reads them from `.env*` files before
+loading your config; the Vite plugin loads `MDX_MEDIA_*` from your `.env*` files itself.
+
+| Variable | What it does |
+| --- | --- |
+| `MDX_MEDIA_MANAGER` | Set to `false` to turn MDX Media Manager off. With Vite, set it in the shell (`MDX_MEDIA_MANAGER=false vite dev`), not in a `.env` file. |
+| `MDX_MEDIA_S3_BUCKET` | Turns on [S3 storage](/docs/s3). Requires `MDX_MEDIA_CDN_URL`. |
+| `MDX_MEDIA_CDN_URL` | Public URL the bucket is served from. This is what's written into your MDX. |
+| `MDX_MEDIA_S3_REGION` | Bucket region. Defaults to `auto` with a custom endpoint, otherwise `us-east-1`. |
+| `MDX_MEDIA_S3_ENDPOINT` | Endpoint of an S3-compatible service (Cloudflare R2, MinIO, …). |
+| `MDX_MEDIA_S3_ACCESS_KEY_ID` | Access key. Leave out both keys to use your AWS profile or SSO session. |
+| `MDX_MEDIA_S3_SECRET_ACCESS_KEY` | Secret for the access key. |
+| `MDX_MEDIA_S3_PREFIX` | Key prefix for uploads. Defaults to `images`. |
+| `MDX_MEDIA_S3_FORCE_PATH_STYLE` | Set to `true` for path-style URLs (MinIO). |
+
+Setting `MDX_MEDIA_S3_BUCKET` without `MDX_MEDIA_CDN_URL` stops the dev server with an error, so
+images are never written with URLs that can't be served.

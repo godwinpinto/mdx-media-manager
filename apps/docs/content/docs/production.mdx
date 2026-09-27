@@ -1,0 +1,49 @@
+---
+title: Production
+description: What ships to production (nothing), and what your build needs.
+---
+
+MDX Media Manager is a development tool. None of it runs or ships in production:
+
+- **Next.js**: the config helper only imports the package when Next starts the dev server. Builds
+  and `next start` get your config unchanged and never load the package.
+- **Vite**: the plugins apply to `vite dev` only. Builds don't include them, and your production
+  server never loads `vite.config.ts`.
+- **Your bundle** contains no overlay, no `data-mmm` attributes and no API routes.
+
+So the package can stay a devDependency, even when production installs skip devDependencies.
+
+What does ship is what it wrote: your MDX files and your images.
+
+## Images in `public/`
+
+Nothing to do. Pages reference `/images/...`, which your framework serves as static files.
+
+## Images from a CDN
+
+If you use [S3](/docs/s3), pages reference CDN URLs. Two things need to be true in production:
+
+**1. `next/image` must allow the CDN host.** Next.js only loads remote images from hosts in your
+config. MDX Media Manager adds the host during development, but it isn't loaded in production, so
+add it yourself:
+
+```js title="next.config.mjs"
+const cdnUrl = process.env.MDX_MEDIA_CDN_URL?.replace(/\/+$/, '');
+
+const config = {
+  images: cdnUrl ? { remotePatterns: [new URL(`${cdnUrl}/**`)] } : undefined,
+};
+```
+
+Or write the host out: `remotePatterns: [new URL('https://images.example.com/**')]`.
+
+**2. The CDN must be reachable from your build.** Fumadocs fetches the size of remote images while
+compiling MDX.
+
+TanStack Start and other Vite apps render plain `<img>` tags and need no image configuration.
+
+## Broken references fail the build
+
+In development, missing images show a placeholder. In production builds they don't: a page that
+references a missing file fails, so broken images never go live unnoticed. Check the library's
+**Broken** filter before you deploy.

@@ -5,5 +5,5 @@
   "fixed": [["mdx-media-manager", "@mdx-media-manager/*"]],
   "access": "public",
   "baseBranch": "main",
-  "ignore": ["next-app", "tanstack-start-app"]
+  "ignore": ["docs", "next-app", "tanstack-start-app"]
 }

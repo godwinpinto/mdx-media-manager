@@ -1,0 +1,104 @@
+---
+title: Adding and editing images
+description: Insert, edit and delete images from the rendered page.
+---
+
+Start your dev server and open any page built from MDX. Two buttons sit in the bottom-right
+corner: **Library** and **Images on/off**. Turning images off hides the overlay (your choice is
+remembered per browser); set `MDX_MEDIA_MANAGER=false` to disable it entirely.
+
+## Insert an image
+
+<Steps>
+<Step>
+
+**Hover a block.** An outline appears around it, with a **+ Image above** or **+ Image below**
+button depending on which half of the block your pointer is in.
+
+</Step>
+<Step>
+
+**Add the image.** Drop a file anywhere on the dialog, paste one (⌘V / Ctrl+V), click **Choose
+file**, or **Paste from clipboard**. Switch to **From library** to reuse an image that's already on
+the site instead of uploading a copy.
+
+</Step>
+<Step>
+
+**Crop and adjust** (optional), fill in the **alt text** (required), check the **file name**, and
+click **Insert**.
+
+</Step>
+</Steps>
+
+The image is saved and a Markdown image is added to your MDX:
+
+```mdx
+![Deployment diagram](/images/docs/guide/deployment-diagram-1a2b3c4d.webp)
+```
+
+### Where you can insert
+
+| You hover | The image goes |
+| --- | --- |
+| A paragraph, heading, list, table, code block | Before or after that block |
+| Content inside a component (`<Callout>`, `<Tab>`, `<Step>`) | Inside the component, indented to match |
+| A component's own area (e.g. the rail beside `<Steps>`) | Before or after the whole component |
+| A list item | Inside the item, under its text |
+
+In a tight list (no blank lines between items), the image goes on its own line inside the item so
+the list keeps its compact spacing.
+
+<Callout type="info">
+  Content in a hidden tab can't be hovered until you open that tab.
+</Callout>
+
+## Crop and output
+
+- **Crop**: drag any edge or corner freely, or type an exact width and height in pixels. Ratio
+  presets: Free, Original, 16:9, 4:3, 1:1. **Reset** returns to the full image.
+- **Output**: WebP (default), AVIF, JPEG or PNG, a quality slider (default 82), and a maximum width
+  (default 1600 px; `0` keeps the original size).
+- Uploads are re-encoded, rotated to their EXIF orientation, and stripped of metadata such as GPS
+  location.
+
+Defaults can be changed with the [`image` option](/docs/configuration).
+
+## Edit an image
+
+Hover an image and click **Edit** in its top-right toolbar. The dialog opens with the current
+image loaded.
+
+- **Rename it or change its alt text** only: the file is renamed as-is, without re-compressing.
+- **Crop it, change the format, or drop a new image**: it is processed again and keeps its name
+  unless you change it.
+- **Save** stays disabled until something changes.
+
+The old file is removed once nothing in the project references it any more.
+
+## Delete an image
+
+Hover the image, click **Delete**, then **Confirm delete**. The image is removed from the MDX
+(with its blank line, so the rest of the file is untouched), and the file is deleted if no other
+page or code file still uses it.
+
+## File names
+
+Images are saved as `<name>-<hash>.<ext>` in a folder named after the page:
+`public/images/<collection>/<page>/`.
+
+- Names are URL- and file-system-friendly: lowercase `a–z`, `0–9` and single hyphens, at most 60
+  characters. Accents are removed (`Café` becomes `cafe`), and characters outside the Latin
+  alphabet are dropped. The dialog shows the name that will be saved, and blocks names with no
+  letters or digits.
+- The name defaults to the alt text or the file's name. Generic names such as `image.png` or
+  screenshots are ignored.
+- The short content hash means files never overwrite each other: the same image under the same name
+  reuses its file, and a different image gets its own. The dialog warns when a similar name already
+  exists in the folder.
+
+## Missing images
+
+If a page references an image file that doesn't exist, Fumadocs would normally fail to compile every
+page. In development, MDX Media Manager shows a **Missing image** placeholder instead. Hover it to
+replace or remove it. Production builds still fail on broken references, as they should.

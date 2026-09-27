@@ -1,0 +1,158 @@
+---
+title: Configuration
+description: All options, with their defaults.
+---
+
+Most projects need no options. Pass them as the second argument of `withMdxMediaManager` (Next.js)
+or to `mdxMediaManager()` (Vite):
+
+<Tabs items={['Next.js', 'Vite']}>
+<Tab value="Next.js">
+
+```js title="next.config.mjs"
+// inside the helper that `init` wrote
+return withMdxMediaManager(input, {
+  image: { format: 'avif', quality: 70 },
+})(phase, context);
+```
+
+</Tab>
+<Tab value="Vite">
+
+```ts title="vite.config.ts"
+mdxMediaManager({
+  image: { format: 'avif', quality: 70 },
+});
+```
+
+</Tab>
+</Tabs>
+
+## Options
+
+<TypeTable
+  type={{
+    contentDir: {
+      description: 'Folder with your MDX content, relative to `root`. Image folders are named after a page\'s path inside it.',
+      type: 'string',
+      default: "'content' if it exists, otherwise the project root",
+    },
+    contentRoots: {
+      description: 'Extra content folders outside the project (monorepo, Fumadocs workspaces). Literal `dir`s in your Fumadocs config are added automatically.',
+      type: 'string[]',
+      default: '[]',
+    },
+    publicDir: {
+      description: 'Static folder served at `/`, relative to `root`.',
+      type: 'string',
+      default: "'public'",
+    },
+    imagesDir: {
+      description: 'Folder inside `publicDir` that images are saved to.',
+      type: 'string',
+      default: "'images'",
+    },
+    image: {
+      description: 'Default output for processed images. The dialog can change them per upload.',
+      type: "{ format?: 'webp' | 'avif' | 'png' | 'jpeg'; quality?: number; maxWidth?: number }",
+      default: "{ format: 'webp', quality: 82, maxWidth: 1600 }",
+    },
+    maxUploadSize: {
+      description: 'Largest accepted upload, in bytes.',
+      type: 'number',
+      default: '26214400 (25 MB)',
+    },
+    pageUrl: {
+      description: 'URL a content file is served at (path relative to `root`), for "Open" links in the library. Return `undefined` to use the default.',
+      type: '(file: string) => string | undefined',
+      default: "content/docs/a/index.mdx → '/docs/a'",
+    },
+    s3: {
+      description: 'Store images in S3 and reference them by CDN URL. `false` turns it off even when the environment variables are set.',
+      type: 'S3Options | false',
+      default: 'read from MDX_MEDIA_* environment variables',
+      typeDescriptionLink: '#s3-options',
+    },
+    allowedHosts: {
+      description: 'Hostnames allowed to use the API, besides localhost, 127.0.0.1 and ::1 (for example a LAN name).',
+      type: 'string[]',
+      default: '[]',
+    },
+    basePath: {
+      description: 'URL prefix of the API.',
+      type: 'string',
+      default: "'/__mdx-media'",
+    },
+    root: {
+      description: 'Project root containing your content and public folder.',
+      type: 'string',
+      default: 'process.cwd() (Vite: the Vite root)',
+    },
+    env: {
+      description: 'Environment to read MDX_MEDIA_* variables from.',
+      type: 'Record<string, string | undefined>',
+      default: 'process.env',
+    },
+  }}
+/>
+
+### Next.js only
+
+<TypeTable
+  type={{
+    enabled: {
+      description: 'Set to `false` to turn the overlay off. The environment variable MDX_MEDIA_MANAGER=false does the same.',
+      type: 'boolean',
+      default: 'true',
+    },
+    loaders: {
+      description: 'MDX loaders to instrument, matched by name.',
+      type: 'string[]',
+      default: "['fumadocs-mdx/webpack/mdx', '@mdx-js/loader']",
+    },
+  }}
+/>
+
+### Vite only
+
+<TypeTable
+  type={{
+    enabled: {
+      description: 'Set to `false` to turn the overlay off. The environment variable MDX_MEDIA_MANAGER=false does the same.',
+      type: 'boolean',
+      default: 'true',
+    },
+    include: {
+      description: 'Files to instrument.',
+      type: 'RegExp',
+      default: '/\\.mdx?$/',
+    },
+  }}
+/>
+
+## S3 options
+
+Usually set through [environment variables](/docs/environment-variables); see
+[S3 and CDN](/docs/s3).
+
+<TypeTable
+  type={{
+    bucket: { description: 'Bucket name.', type: 'string', required: true },
+    cdnUrl: {
+      description: 'Public base URL objects are served from (CDN, R2 custom domain). Written into your MDX.',
+      type: 'string',
+      required: true,
+    },
+    region: { description: 'Bucket region.', type: 'string', default: "'auto' with an endpoint, otherwise 'us-east-1'" },
+    endpoint: { description: 'For S3-compatible services: Cloudflare R2, MinIO, DigitalOcean Spaces, …', type: 'string' },
+    accessKeyId: { description: 'Leave out, with the secret, to use the default AWS credential chain (env, profile, SSO).', type: 'string' },
+    secretAccessKey: { description: 'Secret for `accessKeyId`.', type: 'string' },
+    prefix: { description: 'Key prefix for uploaded images.', type: 'string', default: "'images'" },
+    forcePathStyle: { description: 'Path-style URLs (MinIO).', type: 'boolean', default: 'false' },
+    cacheControl: {
+      description: 'Cache-Control for uploaded objects. Safe to cache for good: names contain a content hash.',
+      type: 'string',
+      default: "'public, max-age=31536000, immutable'",
+    },
+  }}
+/>

@@ -1,0 +1,69 @@
+---
+title: Next.js
+description: Set up MDX Media Manager in a Next.js + Fumadocs project.
+---
+
+`npx mdx-media-manager init` does this for you. To do it by hand, wrap your config with a small
+helper that loads the package only when Next starts the dev server:
+
+```js title="next.config.mjs"
+import { createMDX } from 'fumadocs-mdx/next';
+
+const withMDX = createMDX();
+
+/** @type {import('next').NextConfig} */
+const config = {
+  reactStrictMode: true,
+};
+
+// mdx-media-manager: edit images from the rendered page. Loaded only by `next dev`,
+// so production builds and `next start` never need the package.
+const withMediaManager =
+  (input) =>
+  async (phase, context) => {
+    if (phase === 'phase-development-server') {
+      const { withMdxMediaManager } = await import('mdx-media-manager/next');
+      return withMdxMediaManager(input)(phase, context);
+    }
+    return typeof input === 'function' ? input(phase, context) : input;
+  };
+
+export default withMediaManager(withMDX(config));
+```
+
+That's all: no route files, no components, no layout changes.
+
+## Why a helper instead of an import
+
+A plain `import { withMdxMediaManager } from 'mdx-media-manager/next'` at the top of the file
+would run in production too, and `next start` would fail wherever devDependencies aren't installed.
+The helper imports the package inside the config function, only in the development phase. It
+works in `next.config.mjs`, `.js`, `.cjs` and `.ts`; in TypeScript, `init` writes a typed version.
+
+## Passing options
+
+Pass [options](/docs/configuration) as the second argument:
+
+```js title="next.config.mjs"
+const mediaManagerOptions = {
+  image: { format: 'avif', quality: 70 },
+};
+
+const withMediaManager =
+  (input) =>
+  async (phase, context) => {
+    if (phase === 'phase-development-server') {
+      const { withMdxMediaManager } = await import('mdx-media-manager/next');
+      return withMdxMediaManager(input, mediaManagerOptions)(phase, context);
+    }
+    return typeof input === 'function' ? input(phase, context) : input;
+  };
+```
+
+## What it changes in development
+
+- Wraps the Fumadocs MDX loader so pages carry their source positions (Turbopack and webpack).
+- Starts the API on `127.0.0.1` and proxies `/__mdx-media/*` to it with a rewrite.
+- With [S3](/docs/s3) configured, allows the CDN host for `next/image`.
+
+Outside `next dev` your config is returned untouched.

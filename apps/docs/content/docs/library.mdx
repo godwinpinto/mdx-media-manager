@@ -1,0 +1,53 @@
+---
+title: Image library
+description: Browse every image, see where it's used, rename it everywhere and clean up.
+---
+
+Click **Library** in the bottom-right corner of any page.
+
+## Browse
+
+The library lists every image in `public/images`, plus any other public image your content uses.
+Each card shows the file, its size and dimensions, how many times it's used, and badges for
+**unused**, **no alt** and **S3**.
+
+- **Search** by file name, alt text or page.
+- **Filter** by page, or by health: **All**, **Unused**, **Missing alt**, **Broken**.
+- **↻** rescans the project.
+
+Click an image to see its details: its file, where it's stored, its size, and every place it's
+used. Each use links to the page; **Open** scrolls to the spot and highlights it.
+
+## Rename everywhere
+
+Change the name and click **Rename everywhere**. The image gets its new name and every page that
+uses it is updated, whether it's written as `![]()` or `<img>`. If a code file (such as a `.tsx`
+component) still mentions the old URL, the old file is kept and the library tells you where.
+
+Images used only in code files can't be renamed here; change them in the code.
+
+## Alt text on every use
+
+Set one description and click **Apply to all**. It's written to every use of the image, including
+`<img>` elements that had no `alt` attribute.
+
+## Health checks
+
+| Filter | Shows | What you can do |
+| --- | --- | --- |
+| **Unused** | Images no page or code file mentions | Delete one, or all at once |
+| **Missing alt** | Images with at least one use without alt text | Apply alt text to all uses |
+| **Broken** | References to images that don't exist | Open the page and replace or remove them |
+
+Deleting always re-checks that nothing references the file first.
+
+## Insert from the library
+
+In the insert dialog, switch to **From library**, pick an image, and add alt text. The existing file
+is reused rather than copied. The alt text used most often for that image is suggested.
+
+## With S3
+
+When [S3 is configured](/docs/s3), bucket images your pages use appear with an **S3** badge, and
+local images get a **Move to S3** action. The library doesn't list the bucket itself, so
+**Unused** only covers local files.

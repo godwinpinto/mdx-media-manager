@@ -1,0 +1,74 @@
+---
+title: How it works
+description: What happens between a click on the page and a change in your MDX file.
+---
+
+## 1. Pages remember where they came from
+
+In development, the MDX compiler can record where each element came from (the file, line and column
+of the Markdown or JSX). MDX Media Manager turns that on and copies it onto the page as attributes:
+
+```html
+<p data-mmm="content/docs/guide.mdx|3f9a…|14:1|p">…</p>
+<img data-mmm="…|18:1|p" data-mmm-img="/images/docs/guide/diagram-1a2b3c4d.webp" />
+```
+
+- `data-mmm` holds the file, a hash of its contents, the line and column, and the element.
+- `data-mmm-img` keeps the image URL as written in the source (Fumadocs turns images into imports,
+  so the rendered `src` is a different, hashed URL).
+- `data-mmm-in` lists the components an element is inside. It lets the overlay find components that
+  don't put attributes on the page, such as Fumadocs `<Steps>`.
+- Generated blocks without a position (for example highlighted code) are tagged relative to their
+  neighbour.
+
+**Next.js**: the Fumadocs MDX loader is wrapped so it compiles in development mode. Turbopack's
+loader context doesn't report the mode, so without this no positions would be recorded.
+**Vite**: Fumadocs already compiles in development mode, and a late `transform` adds the attributes.
+
+The same step adds the overlay to every MDX page, so there's nothing to put in your layout.
+
+## 2. The overlay
+
+The overlay is a React app in a shadow root on `<body>`, so page styles and its styles can't clash.
+It reads the attributes under your pointer to know what you're pointing at, and calls the API.
+
+## 3. The API edits your files
+
+The API runs inside your dev server process (Next.js: on `127.0.0.1`, reached through a rewrite;
+Vite: as middleware). For an insert it:
+
+<Steps>
+<Step>
+
+**Checks the file hasn't changed** since the page was rendered, by comparing hashes. If it has, it
+answers `409` and the page will refresh itself.
+
+</Step>
+<Step>
+
+**Processes the image** with [sharp](https://sharp.pixelplumbing.com): validates it, crops, resizes,
+re-encodes and strips metadata.
+
+</Step>
+<Step>
+
+**Saves the image first** (to `public/` or S3), because Fumadocs fails to compile a page that
+references a missing file.
+
+</Step>
+<Step>
+
+**Edits the MDX** at the exact position: it parses the file, finds the block, and inserts only the
+new text, matching indentation. The result is parsed again to make sure it's still valid MDX, and
+written atomically. Edits to the same file are queued.
+
+</Step>
+</Steps>
+
+Your framework's hot reload then shows the change. Because the new page has the file's new hash,
+the next edit works right away.
+
+## 4. Nothing reaches production
+
+Outside the dev server, the Next.js helper returns your config untouched and the Vite plugin doesn't
+apply. See [Production](/docs/production).

@@ -1,0 +1,38 @@
+---
+title: CLI
+description: mdx-media-manager init
+---
+
+```bash
+npx mdx-media-manager init [options]
+```
+
+Sets up MDX Media Manager in the current folder.
+
+| Option | Description |
+| --- | --- |
+| `--cwd <dir>` | App folder. Defaults to the current directory. |
+| `--framework next\|vite` | Skip detection. |
+| `--no-install` | Don't add the package to devDependencies. |
+| `--dry-run` | Print what would change without writing anything. |
+| `-h`, `--help` | Show help. |
+
+## What it does
+
+1. **Detects the framework** from the config file it finds: `next.config.ts`, `.mts`, `.mjs`, `.js`
+   or `.cjs` for Next.js; `vite.config.ts`, `.mts`, `.mjs`, `.js`, `.cts` or `.cjs` for Vite. If
+   both exist, Next.js wins when `next` is a dependency.
+2. **Installs the package** as a devDependency, unless it's already in `package.json`. The package
+   manager comes from the nearest lockfile (`pnpm-lock.yaml`, `bun.lock`, `yarn.lock`,
+   `package-lock.json`), searching up to the monorepo root, or else from the one running the
+   command.
+3. **Edits the config**:
+   - **Next.js**: adds the development-only helper before `export default` (or `module.exports`) and
+     wraps the exported config with it. In TypeScript configs the helper is typed.
+   - **Vite**: imports the plugin and adds `mdxMediaManager()` as the first plugin.
+
+Edits keep your formatting, quotes and semicolons. Running `init` again does nothing if the config
+already mentions `mdx-media-manager`.
+
+If a config can't be edited safely (for example `plugins` is a variable rather than an array
+literal), `init` stops and prints the lines to add yourself.

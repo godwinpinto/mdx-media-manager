@@ -1,0 +1,68 @@
+---
+title: HTTP API
+description: The endpoints the overlay uses, and mounting the server yourself.
+---
+
+The overlay talks to a small API served at `/__mdx-media` (see `basePath`). The Next.js and Vite
+integrations mount it for you; this page is for debugging, or for mounting it in another server.
+
+<Callout type="warn">
+  This is the overlay's internal protocol. It may change between minor versions before 1.0.
+</Callout>
+
+## Requests
+
+- Only local requests are accepted (see [Security](/docs/security)).
+- Every request other than `GET` needs the header `x-mdx-media-manager: 1`.
+- Errors are JSON: `{ "code": "CONFLICT", "message": "…" }`.
+
+| Status | Code | When |
+| --- | --- | --- |
+| 400 | `INVALID` | Bad input, invalid image, or an edit that would produce invalid MDX |
+| 403 | `FORBIDDEN` | Not a local request, or the header is missing |
+| 404 | `NOT_FOUND` | File, block or image not found |
+| 409 | `CONFLICT` | The source file changed since the page was rendered |
+| 413 | `INVALID` | Upload larger than `maxUploadSize` |
+| 422 | `UNSUPPORTED` | For example renaming an image outside the managed folder |
+
+Edits are addressed by **source file** (relative to the project root), the file's **hash** when
+the page was rendered (the first 16 hex characters of its SHA-256), and a **target**:
+`{ line, column, element?, sibling? }`, the position of the rendered block in the file.
+
+## Endpoints
+
+| Method | Path | Body | Does |
+| --- | --- | --- | --- |
+| GET | `/status` | | Defaults, max upload size, storage (`local` or `s3`) |
+| POST | `/images/insert` | multipart: `file`, `meta` | Process an upload and insert it before/after a block |
+| POST | `/images/insert-existing` | JSON | Insert an image that already exists (from the library) |
+| POST | `/images/replace` | multipart: `file`, `meta` | Replace an image with a new upload |
+| POST | `/images/update` | JSON | Rename an image and/or change its alt text, without re-encoding |
+| POST | `/images/delete` | JSON | Remove an image, and its file if unused |
+| GET | `/images/source?url=` | | An image's original bytes (local or bucket) |
+| GET | `/images/names?name=&file=` | | Images in the destination folder with a similar name |
+| GET | `/library` | | Every image, its usages, broken references and pages |
+| POST | `/library/rename` | `{ url, name }` | Rename an image on every page |
+| POST | `/library/alt` | `{ url, alt }` | Set alt text on every use |
+| POST | `/library/delete` | `{ urls }` | Delete unused images |
+| POST | `/library/move-to-s3` | `{ urls }` | Upload local images to S3 and rewrite pages |
+
+## Mounting it yourself
+
+The server is a plain Web `Request → Response` handler, so any framework can mount it:
+
+```ts
+import { createMediaManager } from 'mdx-media-manager/server';
+
+const { handler } = createMediaManager({ root: process.cwd() });
+
+// Anywhere that gives you a Request, in development only:
+export const GET = handler;
+export const POST = handler;
+```
+
+For Node servers (Express, Connect), `toNodeHandler(handler)` adapts it, and
+`startDevServer(manager, port)` serves it on `127.0.0.1`.
+
+The overlay also needs pages to carry their source positions, which the Next.js and Vite
+integrations add while compiling MDX. Other setups aren't covered yet.

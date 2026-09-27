@@ -1,0 +1,101 @@
+---
+title: S3 and CDN
+description: Store images in S3, Cloudflare R2 or MinIO and serve them from a CDN.
+---
+
+By default images are saved to `public/`. Set a bucket and a CDN URL, and new images are uploaded
+to the bucket instead, with pages referencing them by CDN URL:
+
+```mdx
+![Architecture](https://images.example.com/images/docs/guide/architecture-1a2b3c4d.webp)
+```
+
+Without these variables nothing changes.
+
+## Set up
+
+Add the variables to `.env.local` (or your shell) and restart the dev server:
+
+<Tabs items={['AWS S3', 'Cloudflare R2', 'MinIO']}>
+<Tab value="AWS S3">
+
+```bash title=".env.local"
+MDX_MEDIA_S3_BUCKET=my-docs-images
+MDX_MEDIA_CDN_URL=https://images.example.com   # CloudFront, or the bucket's public URL
+MDX_MEDIA_S3_REGION=eu-west-1
+MDX_MEDIA_S3_ACCESS_KEY_ID=…
+MDX_MEDIA_S3_SECRET_ACCESS_KEY=…
+```
+
+Leave out both keys to use your AWS profile or SSO session instead.
+
+</Tab>
+<Tab value="Cloudflare R2">
+
+```bash title=".env.local"
+MDX_MEDIA_S3_BUCKET=my-docs-images
+MDX_MEDIA_CDN_URL=https://images.example.com   # R2 custom domain (or the r2.dev URL)
+MDX_MEDIA_S3_ENDPOINT=https://<ACCOUNT_ID>.r2.cloudflarestorage.com
+MDX_MEDIA_S3_ACCESS_KEY_ID=…                   # R2 API token
+MDX_MEDIA_S3_SECRET_ACCESS_KEY=…
+```
+
+The region defaults to `auto` when an endpoint is set, which is what R2 expects.
+
+</Tab>
+<Tab value="MinIO">
+
+```bash title=".env.local"
+MDX_MEDIA_S3_BUCKET=docs
+MDX_MEDIA_CDN_URL=http://localhost:9000/docs
+MDX_MEDIA_S3_ENDPOINT=http://localhost:9000
+MDX_MEDIA_S3_FORCE_PATH_STYLE=true
+MDX_MEDIA_S3_ACCESS_KEY_ID=minioadmin
+MDX_MEDIA_S3_SECRET_ACCESS_KEY=minioadmin
+```
+
+With a local server, Next.js is allowed to load images from a local IP during development.
+
+</Tab>
+</Tabs>
+
+All variables are listed in [Environment variables](/docs/environment-variables). You can also pass
+the same settings as the `s3` [option](/docs/configuration).
+
+<Callout type="warn" title="Credentials stay on your machine">
+  Keys are only read by the dev server. The browser never sees them, and nothing is added to your
+  production build.
+</Callout>
+
+## How it behaves
+
+- **Uploads** go to `<prefix>/<collection>/<page>/<name>-<hash>.<ext>` (prefix `images` by
+  default) with `Cache-Control: public, max-age=31536000, immutable`. That's safe because names
+  contain a content hash: a changed image always gets a new name.
+- **Edit, rename, replace and delete** work on the bucket. An object is deleted only when no project
+  file references its URL any more.
+- **Editing an S3 image** loads the original through your dev server, so the CDN doesn't need CORS.
+- **Missing objects** referenced by a page show the *Missing image* placeholder in development.
+
+## The library with S3
+
+Bucket images your pages use appear in the library with an **S3** badge, with their usages, rename
+and alt text. The bucket itself isn't listed, so images nothing references don't show up, and
+**Unused** only covers local files.
+
+## Move existing images to S3
+
+Local images stay where they are when you turn S3 on. To move them:
+
+- **One image**: open it in the library and click **Move to S3**.
+- **All at once**: click **Move N local to S3** in the library toolbar. Images nothing uses are left
+  out; delete those instead.
+
+Each image is uploaded under the same path, every page that uses it is rewritten to the CDN URL,
+and the local file is deleted once nothing else references it. If a code file still mentions it,
+the local file is kept and the library says where.
+
+## Production
+
+Your pages now contain CDN URLs, so two things must hold in production. See
+[Production](/docs/production#images-from-a-cdn).

@@ -1,0 +1,47 @@
+---
+title: Introduction
+description: Add, edit and delete images in your MDX docs from the rendered page, while your dev server runs.
+---
+
+MDX Media Manager adds an editing overlay to your documentation site in development. Hover any
+block of a page to insert an image there, or hover an image to edit or delete it. It processes
+the image, saves the file, and edits your `.mdx` source at the exact spot, so hot reload shows the
+change right away.
+
+It is built for [Fumadocs](https://fumadocs.dev) and works with Next.js and TanStack Start (Vite).
+
+## What you get
+
+- **Insert, edit, delete on the page.** Works on any block: paragraphs, headings, lists, code
+  blocks, tables, and content inside components like `<Callout>`, `<Tabs>` and `<Steps>`.
+- **Image processing.** Free-form cropping, exact sizes, and conversion to WebP (or AVIF, JPEG,
+  PNG) with resizing and metadata stripped.
+- **Clean source edits.** Only the lines that change are touched; the rest of the file stays
+  byte-for-byte identical.
+- **An image library.** Browse every image, see where it's used, rename it everywhere, fix alt
+  text, and clean up unused or broken images.
+- **Optional S3 and CDN.** Store images in S3, Cloudflare R2 or any S3-compatible service and
+  reference them by CDN URL.
+- **Development only.** Nothing is added to production builds: no routes, no components, no
+  runtime code.
+
+## How it looks
+
+1. Run your dev server and open a docs page.
+2. Hover a paragraph: an outline and a **+ Image below** button appear.
+3. Click it, drop or paste an image, crop it, give it alt text, and click **Insert**.
+4. The image is saved to `public/images/docs/<page>/`, and a line like
+   `![Architecture](/images/docs/guide/architecture-1a2b3c4d.webp)` is added to your MDX.
+
+## Requirements
+
+- Node.js 20.9 or later.
+- React 19.
+- Next.js 15.3 or later (tested with 16.3), or Vite 6 or later (tested with TanStack Start on Vite 8).
+- MDX compiled by [Fumadocs MDX](https://fumadocs.dev/docs/mdx). `@mdx-js/loader` is instrumented
+  too, but Fumadocs MDX is what is tested.
+
+<Cards>
+  <Card title="Installation" href="/docs/installation" description="Set it up with one command." />
+  <Card title="How it works" href="/docs/how-it-works" description="What happens between a click and your MDX file." />
+</Cards>

@@ -1,0 +1,49 @@
+---
+title: TanStack Start and Vite
+description: Set up MDX Media Manager with the Vite plugin.
+---
+
+`npx mdx-media-manager init` does this for you. To do it by hand, add the plugin to your Vite
+config:
+
+```ts title="vite.config.ts"
+import { defineConfig } from 'vite';
+import { fumadocsMdx } from 'fumadocs-mdx/vite';
+import { tanstackStart } from '@tanstack/react-start/plugin/vite';
+import react from '@vitejs/plugin-react';
+import { mdxMediaManager } from 'mdx-media-manager/vite'; // [!code highlight]
+
+export default defineConfig({
+  plugins: [
+    mdxMediaManager(), // [!code highlight]
+    fumadocsMdx(),
+    tanstackStart(),
+    react(),
+  ],
+});
+```
+
+The plugin only applies to `vite dev` (`apply: 'serve'`). Builds contain none of it, and the
+production server never loads `vite.config.ts`, so a static import is fine here.
+
+## Passing options
+
+```ts title="vite.config.ts"
+mdxMediaManager({
+  image: { format: 'avif' },
+});
+```
+
+See [Configuration](/docs/configuration) for all options. Besides the shared ones, the Vite plugin
+accepts `enabled` and `include` (a regular expression for the files to instrument, `.md` and
+`.mdx` by default).
+
+## Environment variables
+
+Vite doesn't expose `.env` values to plugins by default. The plugin loads `MDX_MEDIA_*` variables
+from your `.env` files itself, so [S3 settings](/docs/s3) in `.env.local` work.
+
+## Other Vite frameworks
+
+The plugin has nothing specific to TanStack Start: it works wherever Fumadocs MDX compiles your
+content through Vite. Other setups (React Router, Waku, Astro) should work but haven't been tested.

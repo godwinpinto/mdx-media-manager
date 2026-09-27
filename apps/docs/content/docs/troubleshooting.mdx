@@ -1,0 +1,63 @@
+---
+title: Troubleshooting
+description: Common problems and known limitations.
+---
+
+<Accordions type="single">
+<Accordion title="The overlay doesn't appear">
+
+- Make sure you're running the **dev server** (`next dev` / `vite dev`); nothing is added to builds.
+- Check the **Images on/off** button in the bottom-right corner, and that `MDX_MEDIA_MANAGER` isn't
+  set to `false`.
+- The overlay appears on pages rendered from MDX. If you compile MDX with a loader other than
+  Fumadocs MDX or `@mdx-js/loader`, add its name to the `loaders` option (Next.js).
+- Visit `/__mdx-media/status`: it should return JSON.
+
+</Accordion>
+<Accordion title="&quot;This page changed on disk&quot; (409)">
+
+The file changed after the page was rendered, for example because you saved it in your editor. Wait
+for hot reload to refresh the page, then try again. This check prevents edits from landing in the
+wrong place.
+
+</Accordion>
+<Accordion title="I can't insert after a whole component">
+
+Hover the component's own area rather than the text inside it: for `<Steps>`, the numbered rail
+beside the steps. Hovering text targets the innermost block.
+
+</Accordion>
+<Accordion title="An image in a tab can't be hovered">
+
+Content of a tab that isn't open isn't on the page. Open the tab first.
+
+</Accordion>
+<Accordion title="CDN images don't load in production (Next.js)">
+
+Add the CDN host to `images.remotePatterns` in `next.config`. MDX Media Manager only adds it during
+development. See [Production](/docs/production#images-from-a-cdn).
+
+</Accordion>
+<Accordion title="The dev server stops: MDX_MEDIA_CDN_URL is not set">
+
+`MDX_MEDIA_S3_BUCKET` is set without `MDX_MEDIA_CDN_URL`. Set the public URL the bucket is served
+from, or remove the bucket variable to keep images in `public/`.
+
+</Accordion>
+<Accordion title="In a monorepo, the Vite overlay doesn't pick up my changes">
+
+When MDX Media Manager is linked from a workspace (not installed from npm), Vite serves it without
+pre-bundling so rebuilds show up. If you still see an old version, restart with `vite --force`.
+
+</Accordion>
+</Accordions>
+
+## Known limitations
+
+- Pages from generated or remote content (OpenAPI, CMS, remote MDX) can't be edited: there's no
+  local file.
+- Collections compiled with Fumadocs' experimental `compiler: 'satteri'` haven't been tested.
+- Images are inserted as Markdown (`![alt](url)`). JSX `<img>` elements with width or captions can
+  be edited but not created.
+- The library scans the whole project each time it opens; very large sites may find it slow.
+- With S3, the library doesn't list the bucket, so unreferenced objects aren't shown.

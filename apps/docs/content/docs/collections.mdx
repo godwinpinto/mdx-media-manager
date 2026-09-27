@@ -1,0 +1,92 @@
+---
+title: Multiple collections and shared content
+description: Docs, blog and content outside the app, including monorepos.
+---
+
+## Several collections in one app
+
+Every local MDX collection works: `defineDocs` and `defineCollections` in the same app (docs, blog,
+changelog, and so on) are all tagged, editable, and part of the library.
+
+Image folders are named relative to `content/`, so each collection gets its own:
+
+<Files>
+  <Folder name="content" defaultOpen>
+    <Folder name="docs" defaultOpen>
+      <File name="guide.mdx" />
+    </Folder>
+    <Folder name="blog" defaultOpen>
+      <File name="hello-world.mdx" />
+    </Folder>
+  </Folder>
+  <Folder name="public" defaultOpen>
+    <Folder name="images" defaultOpen>
+      <Folder name="docs/guide" defaultOpen>
+        <File name="diagram-1a2b3c4d.webp" />
+      </Folder>
+      <Folder name="blog/hello-world" defaultOpen>
+        <File name="cover-9f8e7d6c.webp" />
+      </Folder>
+    </Folder>
+  </Folder>
+</Files>
+
+Use the `contentDir` [option](/docs/configuration) if your content lives somewhere else.
+
+## Content outside the app
+
+In a monorepo, docs often live in a shared package that several apps render. MDX Media Manager
+only edits files inside your project, so folders outside it need to be allowed explicitly.
+
+**Detected automatically:** `dir` values written as plain strings in your Fumadocs config.
+
+```ts title="lib/source.ts"
+import { defineDocs } from 'fumadocs-mdx/macro';
+
+export const handbook = defineDocs({
+  dir: '../../shared/handbook', // detected as a content root
+});
+```
+
+This covers `defineDocs`, `defineCollections`, and `defineConfig({ workspaces })` in
+`source.config.ts`.
+
+**Anything else** (computed paths, other tools): list the folders with `contentRoots`:
+
+```js
+withMdxMediaManager(input, {
+  contentRoots: ['../../shared/handbook'],
+});
+```
+
+Only `.md` and `.mdx` files inside these folders can be edited. Their images go to
+`public/images/<folder name>/<page>`, for example `images/handbook/intro/`.
+
+## Page links for shared content
+
+The library's **Open** links need to know which URL each file is served at. The default follows
+Fumadocs' convention (`content/docs/guide.mdx` → `/docs/guide`). For content outside the app, give
+a `pageUrl`. Return `undefined` for other files to keep the default:
+
+```js title="next.config.mjs"
+const handbookDir = '../../shared/handbook/';
+
+const mediaManagerOptions = {
+  pageUrl: (file) => {
+    if (!file.startsWith(handbookDir)) return undefined;
+    const page = file
+      .slice(handbookDir.length)
+      .replace(/\.mdx?$/, '')
+      .replace(/(^|\/)index$/, '');
+    return page ? `/handbook/${page}` : '/handbook';
+  },
+};
+```
+
+`file` is relative to your app, so files outside it start with `../`.
+
+## Not supported
+
+- Generated or remote content (OpenAPI pages, remote MDX, CMS sources): there is no local file to
+  edit.
+- Collections compiled with Fumadocs' experimental `compiler: 'satteri'` haven't been tested.

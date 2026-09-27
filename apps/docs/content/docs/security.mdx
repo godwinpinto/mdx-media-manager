@@ -1,0 +1,31 @@
+---
+title: Security
+description: How the API is protected, even though it only runs in development.
+---
+
+The API can write files, so it only answers your own browser on your own machine.
+
+## Who can call it
+
+- **Local only.** The `Host` must be `localhost`, `127.0.0.1` or `::1` (or a name in
+  `allowedHosts`). This blocks DNS-rebinding attacks.
+- **Same site only.** A browser's `Origin` must be local too. Other websites you visit can't call
+  it.
+- **A custom header** (`x-mdx-media-manager`) is required on every write. Browsers can't add it
+  from another site without a CORS preflight, which the API never approves.
+- In Next.js the API itself listens on `127.0.0.1` only.
+
+## What it can touch
+
+- **Source files**: only `.md` and `.mdx`, only inside your project or a configured
+  [content root](/docs/collections), never in `node_modules`, and never through symlinks.
+- **Image files**: only inside `public/`. Deletes are limited to the images folder
+  (`public/images`), and only when nothing references the file.
+- **Uploads** are checked by decoding them, then re-encoded, which removes anything that isn't image
+  data. SVG is not accepted. Uploads larger than `maxUploadSize` (25 MB) are refused.
+- **Image reads** (`/images/source`) only serve files from `public/` or the configured bucket.
+
+## S3 credentials
+
+Keys are read by the dev server from its environment and never sent to the browser. Use a key that
+can only access the one bucket.

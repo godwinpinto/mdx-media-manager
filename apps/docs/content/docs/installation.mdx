@@ -1,0 +1,67 @@
+---
+title: Installation
+description: Add MDX Media Manager to a Next.js or TanStack Start project with one command.
+---
+
+## Automatic setup
+
+Run this in your app's folder (the one with `next.config.*` or `vite.config.*`):
+
+```bash
+npx mdx-media-manager init
+```
+
+It will:
+
+<Steps>
+<Step>
+
+**Detect your framework** from `next.config.*` (Next.js) or `vite.config.*` (Vite, such as
+TanStack Start).
+
+</Step>
+<Step>
+
+**Install the package** as a devDependency, using your package manager (pnpm, yarn, bun or npm,
+detected from the nearest lockfile).
+
+</Step>
+<Step>
+
+**Edit your config file**: only what's needed, keeping your quotes and semicolons. For Next.js it
+adds a small development-only helper; for Vite it adds the plugin.
+
+</Step>
+</Steps>
+
+Then start your dev server and hover a docs page. Running `init` again is safe: it detects that
+the project is already set up.
+
+| Option | What it does |
+| --- | --- |
+| `--dry-run` | Show what would change without writing anything |
+| `--no-install` | Don't install the package |
+| `--cwd <dir>` | Run in another folder |
+| `--framework next\|vite` | Skip detection |
+
+See the [CLI reference](/docs/cli) for details.
+
+## Manual setup
+
+Install the package as a devDependency:
+
+```npm
+npm install -D mdx-media-manager
+```
+
+Then add it to your config:
+
+<Cards>
+  <Card title="Next.js" href="/docs/nextjs" />
+  <Card title="TanStack Start and Vite" href="/docs/tanstack-start" />
+</Cards>
+
+<Callout title="A devDependency is enough">
+  The package is only loaded while your dev server runs. Production builds and servers never need it,
+  even when they install without devDependencies.
+</Callout>
