@@ -7,7 +7,9 @@
     "fumadocs",
     "images",
     "mdx",
-    "next"
+    "next",
+    "tanstack-start",
+    "vite"
   ],
   "license": "MIT",
   "files": [
@@ -17,6 +19,7 @@
   "sideEffects": false,
   "exports": {
     "./next": "./dist/next.js",
+    "./vite": "./dist/vite.js",
     "./loader": "./dist/loader.js",
     "./client": "./dist/client.js",
     "./server": "./dist/server.js",
@@ -37,6 +40,7 @@
     "magic-string": "^1.4.2"
   },
   "devDependencies": {
+    "@mdx-js/mdx": "^3.1.1",
     "@types/node": "^26.6.1",
     "@types/react": "^19.3.0",
     "next": "16.3.6",
@@ -44,15 +48,19 @@
     "tsconfig": "workspace:*",
     "tsdown": "0.23.0",
     "typescript": "^7.0.2",
-    "vitest": "^5.0.2",
-    "@mdx-js/mdx": "^3.1.1"
+    "vite": "^8.3.0",
+    "vitest": "^5.0.2"
   },
   "peerDependencies": {
     "next": ">=15.3.0",
-    "react": "^19.0.0"
+    "react": "^19.0.0",
+    "vite": ">=6.0.0"
   },
   "peerDependenciesMeta": {
     "next": {
+      "optional": true
+    },
+    "vite": {
       "optional": true
     }
   }

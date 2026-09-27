@@ -7,7 +7,9 @@ const root = '/project';
 const resourcePath = '/project/content/docs/page.mdx';
 
 async function run(source: string, rehypePlugins: never[] = []) {
-  const compiled = String(await compile({ value: source, path: resourcePath }, { development: true, rehypePlugins }));
+  const compiled = String(
+    await compile({ value: source, path: resourcePath }, { development: true, rehypePlugins }),
+  );
   return transformCompiledMdx(compiled, {
     resourcePath,
     source,
@@ -40,7 +42,9 @@ describe('transformCompiledMdx', () => {
 
   it('maps static image imports back to public URLs', async () => {
     const source = `Text\n`;
-    const compiled = String(await compile({ value: source, path: resourcePath }, { development: true }));
+    const compiled = String(
+      await compile({ value: source, path: resourcePath }, { development: true }),
+    );
     const withImport = `import __img0 from "../../public/images/b.png";\n${compiled.replace(
       '_jsxDEV(_components.p, {',
       '_jsxDEV(_components.p, { children: _jsxDEV(_components.img, { src: __img0 }, undefined, false, { fileName: "x" }, this), ',
@@ -55,15 +59,18 @@ describe('transformCompiledMdx', () => {
     });
     expect(out).toContain(`"data-mmm-img": "/images/b.png"`);
     // The generated image points at its paragraph
-    expect(out.match(new RegExp(tag(source, '1:1', 'p').replace(/[|]/g, '\\|'), 'g'))).toHaveLength(2);
+    expect(out.match(new RegExp(tag(source, '1:1', 'p').replace(/[|]/g, '\\|'), 'g'))).toHaveLength(
+      2,
+    );
   });
 
   it('tags generated blocks relative to a positioned sibling', async () => {
     const source = `## A\n\n\`\`\`js\nlet a;\n\`\`\`\n`;
     // Simulate a highlighter that replaces the code block with a new, position-less node.
-    const dropPositions = () => (tree: { children: { tagName?: string; position?: unknown }[] }) => {
-      for (const node of tree.children) if (node.tagName === 'pre') delete node.position;
-    };
+    const dropPositions =
+      () => (tree: { children: { tagName?: string; position?: unknown }[] }) => {
+        for (const node of tree.children) if (node.tagName === 'pre') delete node.position;
+      };
     const out = await run(source, [dropPositions as never]);
     expect(out).toContain(tag(source, '1:1', 'h2', 1));
   });
@@ -71,7 +78,9 @@ describe('transformCompiledMdx', () => {
   it('wraps the default export with the overlay', async () => {
     const out = await run('Hello\n');
     expect(out).not.toMatch(/export default function MDXContent\b/);
-    expect(out).toContain('import { MediaManagerOverlay as __mmm_Overlay } from "mdx-media-manager/client"');
+    expect(out).toContain(
+      'import { MediaManagerOverlay as __mmm_Overlay } from "mdx-media-manager/client"',
+    );
     expect(out).toContain('export default function MDXContentWithMediaManager(props)');
     expect(out).toContain('{"basePath":"/__mdx-media"}');
   });

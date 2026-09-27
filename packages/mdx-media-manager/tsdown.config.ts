@@ -5,5 +5,5 @@ export default defineConfig({
   fixedExtension: false,
   target: 'es2023',
   format: 'esm',
-  entry: ['src/next.ts', 'src/loader.ts', 'src/client.ts', 'src/server.ts'],
+  entry: ['src/next.ts', 'src/vite.ts', 'src/loader.ts', 'src/client.ts', 'src/server.ts'],
 });

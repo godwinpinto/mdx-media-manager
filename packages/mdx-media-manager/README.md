@@ -70,6 +70,22 @@ withMdxMediaManager(config, {
 The API only answers local requests (localhost host and origin, plus a custom header), refuses
 paths outside the project, and re-encodes every upload.
 
+## Setup (TanStack Start / Vite)
+
+```ts
+// vite.config.ts
+import { fumadocsMdx } from 'fumadocs-mdx/vite';
+import { mdxMediaManager } from 'mdx-media-manager/vite';
+
+export default defineConfig({
+  plugins: [mdxMediaManager(), fumadocsMdx(), tanstackStart(), react()],
+});
+```
+
+The plugins only apply to `vite dev` (`apply: 'serve'`): the API is mounted on Vite's dev server
+and compiled MDX is tagged in a late `transform`. Builds contain none of it, and the production
+server never loads `vite.config.ts`. It takes the same options as the Next.js integration.
+
 ## Other frameworks
 
 The server is framework-agnostic:
@@ -80,5 +96,3 @@ import { createMediaManager } from 'mdx-media-manager/server';
 const { handler } = createMediaManager({ root: process.cwd() });
 // handler(request: Request): Promise<Response> — mount under /__mdx-media in development
 ```
-
-A TanStack Start / Vite integration is planned.
