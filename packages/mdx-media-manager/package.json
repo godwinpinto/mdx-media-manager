@@ -11,12 +11,23 @@
     "tanstack-start",
     "vite"
   ],
+  "homepage": "https://github.com/godwinpinto/mdx-media-manager#readme",
+  "bugs": {
+    "url": "https://github.com/godwinpinto/mdx-media-manager/issues"
+  },
   "license": "MIT",
+  "author": "Godwin Pinto",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/godwinpinto/mdx-media-manager.git",
+    "directory": "packages/mdx-media-manager"
+  },
   "bin": {
     "mdx-media-manager": "./dist/cli.js"
   },
   "files": [
     "dist",
+    "LICENSE",
     "assets"
   ],
   "type": "module",

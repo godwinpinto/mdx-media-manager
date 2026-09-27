@@ -1,5 +1,8 @@
 # mdx-media-manager monorepo
 
+Add, edit and delete images in your MDX docs from the rendered page, during development.
+Repository: https://github.com/godwinpinto/mdx-media-manager
+
 | Path                         | Package                   | What                                                                                         |
 | ---------------------------- | ------------------------- | -------------------------------------------------------------------------------------------- |
 | `packages/mdx-media-manager` | `mdx-media-manager`       | Public entry: Next.js and Vite integrations, MDX loader, `init` CLI, client + server exports |
@@ -22,3 +25,7 @@ pnpm --filter tanstack-start-app dev   # TanStack Start → http://localhost:300
 
 Hover the docs content. See
 [packages/mdx-media-manager/README.md](packages/mdx-media-manager/README.md).
+
+## License
+
+[MIT](LICENSE) © Godwin Pinto

@@ -2,9 +2,20 @@
   "name": "@mdx-media-manager/core",
   "version": "0.0.0",
   "description": "Framework-agnostic server for mdx-media-manager: MDX source editing, image processing and the API handler",
+  "homepage": "https://github.com/godwinpinto/mdx-media-manager#readme",
+  "bugs": {
+    "url": "https://github.com/godwinpinto/mdx-media-manager/issues"
+  },
   "license": "MIT",
+  "author": "Godwin Pinto",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/godwinpinto/mdx-media-manager.git",
+    "directory": "packages/core"
+  },
   "files": [
-    "dist"
+    "dist",
+    "LICENSE"
   ],
   "type": "module",
   "sideEffects": false,

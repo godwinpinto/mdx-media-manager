@@ -221,3 +221,7 @@ import { createMediaManager } from 'mdx-media-manager/server';
 const { handler } = createMediaManager({ root: process.cwd() });
 // handler(request: Request): Promise<Response> — mount under /__mdx-media in development
 ```
+
+## License
+
+[MIT](./LICENSE) © Godwin Pinto

@@ -2,9 +2,20 @@
   "name": "@mdx-media-manager/ui",
   "version": "0.0.0",
   "description": "In-page React overlay for mdx-media-manager (development only)",
+  "homepage": "https://github.com/godwinpinto/mdx-media-manager#readme",
+  "bugs": {
+    "url": "https://github.com/godwinpinto/mdx-media-manager/issues"
+  },
   "license": "MIT",
+  "author": "Godwin Pinto",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/godwinpinto/mdx-media-manager.git",
+    "directory": "packages/ui"
+  },
   "files": [
-    "dist"
+    "dist",
+    "LICENSE"
   ],
   "type": "module",
   "sideEffects": false,
