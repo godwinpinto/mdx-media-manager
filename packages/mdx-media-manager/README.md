@@ -16,12 +16,20 @@ pnpm add -D mdx-media-manager
 ```js
 // next.config.mjs
 import { createMDX } from 'fumadocs-mdx/next';
-import { withMdxMediaManager } from 'mdx-media-manager/next';
 
 const withMDX = createMDX();
 
-export default withMdxMediaManager(withMDX({ reactStrictMode: true }));
+// Loaded only by `next dev`, so production (`next build` / `next start`) never needs the package.
+const withMediaManager =
+  process.env.NODE_ENV === 'development'
+    ? (await import('mdx-media-manager/next')).withMdxMediaManager
+    : (config) => config;
+
+export default withMediaManager(withMDX({ reactStrictMode: true }));
 ```
+
+The package can stay a devDependency: production installs without devDependencies still work,
+because the import only runs in development.
 
 That's it: no route files, no components to add. Run `next dev` and hover your docs.
 

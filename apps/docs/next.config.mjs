@@ -1,11 +1,16 @@
 import { createMDX } from 'fumadocs-mdx/next';
-import { withMdxMediaManager } from 'mdx-media-manager/next';
 
 const withMDX = createMDX();
+
+// Loaded only by `next dev`, so production (`next build` / `next start`) never needs the package.
+const withMediaManager =
+  process.env.NODE_ENV === 'development'
+    ? (await import('mdx-media-manager/next')).withMdxMediaManager
+    : (config) => config;
 
 /** @type {import('next').NextConfig} */
 const config = {
   reactStrictMode: true,
 };
 
-export default withMdxMediaManager(withMDX(config));
+export default withMediaManager(withMDX(config));
