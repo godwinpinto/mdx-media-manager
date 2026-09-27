@@ -153,8 +153,13 @@ export function ImageDialog({
   useEffect(() => {
     if (!currentUrl) return;
     let cancelled = false;
-    fetch(currentUrl)
-      .then((res) => (res.ok ? res.blob() : Promise.reject(new Error(String(res.status)))))
+    // Through the dev server: works for CDN URLs without CORS.
+    (api
+      ? api.source(currentUrl)
+      : fetch(currentUrl).then((res) =>
+          res.ok ? res.blob() : Promise.reject(new Error(String(res.status))),
+        )
+    )
       .then((blob) => {
         if (cancelled || !blob.type.startsWith('image/')) return;
         const loaded = new File([blob], currentUrl.split('/').pop() || 'image', {
@@ -176,7 +181,7 @@ export function ImageDialog({
     return () => {
       cancelled = true;
     };
-  }, [currentUrl]);
+  }, [currentUrl, api]);
 
   useEffect(() => {
     if (!file) return;

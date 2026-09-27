@@ -5,6 +5,7 @@ import {
   existsSync,
   isInside,
   isReferenced,
+  mentions,
   scopeFiles,
   scopeOf,
   publicFileOf,
@@ -12,7 +13,8 @@ import {
   withFileLock,
   writeAtomic,
 } from './fs';
-import { copyUnderName, removeIfOrphaned } from './images';
+import type { ImageStorage } from './images';
+import { contentTypeOf } from './s3';
 import { listImageUsages, rewriteImagesByUrl } from './mdx/edit';
 import { EditError } from './mdx/errors';
 import { hashSource } from './mdx/hash';
@@ -50,8 +52,10 @@ export interface LibraryImage {
   format?: string;
   /** Last modified, ms since epoch */
   modified: number;
-  /** Inside the managed images folder (can be deleted by the library) */
+  /** Inside the managed images folder / bucket prefix (can be renamed, and deleted when unused) */
   managed: boolean;
+  /** `local` (public folder) or `s3` (bucket, served from the CDN) */
+  storage: 'local' | 's3';
   usages: LibraryUsage[];
   /** Non-MDX project files mentioning the URL (code, config): the image is in use, but those aren't edited */
   mentions: string[];
@@ -102,13 +106,61 @@ async function* filesIn(dir: string, pattern: RegExp): AsyncGenerator<string> {
   }
 }
 
+/** `Promise.all(items.map(fn))` with at most `limit` running at once */
+async function mapLimit<T, R>(
+  items: T[],
+  limit: number,
+  fn: (item: T) => Promise<R>,
+): Promise<R[]> {
+  const results = Array.from<R>({ length: items.length });
+  let next = 0;
+  const worker = async () => {
+    while (next < items.length) {
+      const i = next++;
+      results[i] = await fn(items[i]!);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return results;
+}
+
 type Metadata = { mtimeMs: number; size: number; width?: number; height?: number; format?: string };
 
 export function createLibrary(
   options: ResolvedOptions,
+  storage: ImageStorage,
   pageUrl: (file: string) => string | undefined = defaultPageUrl,
 ) {
   const metadataCache = new Map<string, Metadata>();
+  /** Bucket objects never change under a name (it contains a content hash), so cache for good */
+  const remoteCache = new Map<string, Promise<Metadata | undefined>>();
+
+  function remoteMetadataOf(key: string): Promise<Metadata | undefined> {
+    let cached = remoteCache.get(key);
+    if (!cached) {
+      cached = (async () => {
+        const object = await storage.s3!.get(key);
+        if (!object) return;
+        const meta = await sharp(object.data)
+          .metadata()
+          .catch(() => undefined);
+        return {
+          mtimeMs: 0,
+          size: object.data.byteLength,
+          width: meta?.width,
+          height: meta?.height,
+          format: meta?.format,
+        };
+      })();
+      remoteCache.set(key, cached);
+      // A missing object may be uploaded later: don't cache misses.
+      void cached.then(
+        (meta) => !meta && remoteCache.delete(key),
+        () => remoteCache.delete(key),
+      );
+    }
+    return cached;
+  }
   const relative = (file: string) => path.relative(options.root, file).split(path.sep).join('/');
 
   async function metadataOf(file: string): Promise<Metadata | undefined> {
@@ -150,6 +202,7 @@ export function createLibrary(
     const pages: LibraryPage[] = [];
     const errors: LibraryScan['errors'] = [];
     const otherFiles: { file: string; text: string }[] = [];
+    const remoteUsages = new Map<string, LibraryUsage[]>();
 
     for await (const file of scopeFiles(options, options.publicDir)) {
       const text = await fs.readFile(file, 'utf8').catch(() => undefined);
@@ -175,9 +228,16 @@ export function createLibrary(
       }
       const hash = hashSource(text);
       for (const usage of usages) {
+        const entry: LibraryUsage = { file: rel, hash, ...usage, pageUrl: page };
+        if (storage.keyOf(usage.url)) {
+          // A bucket image: checked for existence below.
+          const list = remoteUsages.get(usage.url) ?? [];
+          list.push(entry);
+          remoteUsages.set(usage.url, list);
+          continue;
+        }
         const resolved = resolveUrl(usage.url, file);
         if (!resolved.file) continue; // external URL
-        const entry: LibraryUsage = { file: rel, hash, ...usage, pageUrl: page };
         if (!existsSync(resolved.file)) broken.push(entry);
         else if (resolved.publicUrl) {
           const list = usagesByUrl.get(resolved.publicUrl) ?? [];
@@ -212,12 +272,41 @@ export function createLibrary(
         format: meta.format,
         modified: meta.mtimeMs,
         managed: isInside(options.imagesDir, file),
+        storage: 'local',
         usages: usagesByUrl.get(url) ?? [],
-        mentions: otherFiles.filter((other) => other.text.includes(url)).map((other) => other.file),
+        mentions: otherFiles
+          .filter((other) => mentions(other.text, url))
+          .map((other) => other.file),
       });
     }
 
-    images.sort((a, b) => b.modified - a.modified);
+    // Bucket images the content references (the bucket itself isn't listed).
+    const remote = [...remoteUsages];
+    const metas = await mapLimit(remote, 6, ([url]) => remoteMetadataOf(storage.keyOf(url)!));
+    remote.forEach(([url, usages], i) => {
+      const meta = metas[i];
+      if (!meta) return void broken.push(...usages);
+      const key = storage.keyOf(url)!;
+      const prefix = storage.s3!.options.prefix;
+      images.push({
+        url,
+        name: path.posix.basename(key),
+        label: prefix && key.startsWith(`${prefix}/`) ? key.slice(prefix.length + 1) : key,
+        size: meta.size,
+        width: meta.width,
+        height: meta.height,
+        format: meta.format,
+        modified: 0,
+        managed: storage.s3!.isManaged(key),
+        storage: 's3',
+        usages,
+        mentions: otherFiles
+          .filter((other) => mentions(other.text, url))
+          .map((other) => other.file),
+      });
+    });
+
+    images.sort((a, b) => b.modified - a.modified || a.label.localeCompare(b.label));
     pages.sort((a, b) => a.file.localeCompare(b.file));
     return { images, broken, pages, errors };
   }
@@ -280,7 +369,7 @@ export function createLibrary(
         );
       }
 
-      const copy = await copyUnderName(options, url, name);
+      const copy = await storage.copyUnderName(url, name);
       if (copy.url === url)
         return { url, updated: [] as string[], failed: [], kept: [] as string[] };
 
@@ -290,7 +379,7 @@ export function createLibrary(
         throw new EditError('INVALID', failed[0]?.message ?? 'No page could be updated.');
       }
       // Kept when code/config (not editable) or a failed page still mentions it.
-      const removed = await removeIfOrphaned(options, url);
+      const removed = await storage.removeIfOrphaned(url);
       return { url: copy.url, updated, failed, removed, kept: removed ? [] : image.mentions };
     },
 
@@ -298,6 +387,58 @@ export function createLibrary(
     async setAlt(url: string, alt: string) {
       const { updated, failed } = await rewriteUsages(url, { alt });
       return { url, updated, failed };
+    },
+
+    /**
+     * Upload local images to the bucket and point every page at their CDN URL. The local file is
+     * deleted once nothing references it (code files that mention it keep it).
+     */
+    async moveToS3(urls: string[]) {
+      const s3 = storage.s3;
+      if (!s3)
+        throw new EditError(
+          'UNSUPPORTED',
+          'S3 is not configured (set MDX_MEDIA_S3_BUCKET and MDX_MEDIA_CDN_URL).',
+        );
+      const moved: {
+        from: string;
+        to: string;
+        updated: string[];
+        failed: { file: string; message: string }[];
+        removed?: string;
+        kept: string[];
+      }[] = [];
+      const skipped: { url: string; reason: string }[] = [];
+
+      for (const url of urls) {
+        const file = storage.keyOf(url) ? undefined : publicFileOf(options.publicDir, url);
+        if (!file || !existsSync(file)) {
+          skipped.push({ url, reason: 'Not a local image in the public folder.' });
+          continue;
+        }
+        const base = isInside(options.imagesDir, file) ? options.imagesDir : options.publicDir;
+        const key = [s3.options.prefix, path.relative(base, file).split(path.sep).join('/')]
+          .filter(Boolean)
+          .join('/');
+        try {
+          if (!(await s3.head(key)))
+            await s3.put(key, await fs.readFile(file), contentTypeOf(file));
+          const to = s3.urlOf(key);
+          const { image, updated, failed } = await rewriteUsages(url, { url: to });
+          const removed = failed.length ? undefined : await storage.removeIfOrphaned(url);
+          moved.push({
+            from: url,
+            to,
+            updated,
+            failed,
+            removed,
+            kept: removed ? [] : image.mentions,
+          });
+        } catch (error) {
+          skipped.push({ url, reason: (error as Error).message });
+        }
+      }
+      return { moved, skipped };
     },
 
     /** Delete unused images in the managed folder; anything still referenced is skipped. */

@@ -26,3 +26,5 @@ export {
   type LibraryScan,
   type LibraryUsage,
 } from './library';
+export { s3OptionsFromEnv, resolveS3Options, type S3Options, type ResolvedS3Options } from './s3';
+export { createImageStorage, type ImageStorage } from './images';

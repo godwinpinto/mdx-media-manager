@@ -162,6 +162,12 @@ input:not([type="range"]), select {
 .card-meta { font-size: 11px; }
 .badges { display: flex; flex-wrap: wrap; gap: 4px; }
 .badge { font-size: 10.5px; padding: 1px 6px; border-radius: 999px; background: var(--field); color: var(--muted); }
+.badge.s3 { color: #0369a1; background: color-mix(in srgb, #0ea5e9 16%, transparent); }
+.layer[data-theme="dark"] .badge.s3 { color: #7dd3fc; }
+.move-all, .detail-actions button.primary {
+  height: 32px; padding: 0 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); font-weight: 500; white-space: nowrap;
+}
+.move-all.primary, .detail-actions button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
 .badge.warn { color: #b45309; background: color-mix(in srgb, #f59e0b 16%, transparent); }
 .layer[data-theme="dark"] .badge.warn, .layer[data-theme="dark"] .segmented .count.attention { color: #fbbf24; }
 

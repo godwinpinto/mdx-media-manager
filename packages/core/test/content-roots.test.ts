@@ -139,3 +139,20 @@ describe('content roots', () => {
     expect(existsSync(path.join(app, 'public', url))).toBe(true);
   });
 });
+
+describe('mentions', () => {
+  it('matches site paths only where they start a path', async () => {
+    const { mentions } = await import('../src/fs');
+    expect(mentions('![a](/images/a.png)', '/images/a.png')).toBe(true);
+    expect(mentions(`src="/images/a.png"`, '/images/a.png')).toBe(true);
+    expect(mentions(`import a from '../../public/images/a.png'`, '/images/a.png')).toBe(true);
+    expect(mentions('![a](https://cdn.example.com/images/a.png)', '/images/a.png')).toBe(false);
+    expect(mentions('see /images/a.png.bak', '/images/a.png')).toBe(true);
+    expect(
+      mentions(
+        '![a](https://cdn.example.com/images/a.png)',
+        'https://cdn.example.com/images/a.png',
+      ),
+    ).toBe(true);
+  });
+});

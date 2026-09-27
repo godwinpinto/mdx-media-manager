@@ -348,7 +348,12 @@ export function App({ basePath, host }: { basePath: string; host: HTMLElement })
       )}
 
       {libraryOpen && (
-        <LibraryPanel api={api} currentFile={currentFile} onClose={() => setLibraryOpen(false)} />
+        <LibraryPanel
+          api={api}
+          currentFile={currentFile}
+          storage={status?.storage}
+          onClose={() => setLibraryOpen(false)}
+        />
       )}
 
       {flashRect && (

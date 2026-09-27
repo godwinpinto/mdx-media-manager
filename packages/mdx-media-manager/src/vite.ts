@@ -32,6 +32,9 @@ export function mdxMediaManager(options: MdxMediaManagerViteOptions = {}): Plugi
   let publicDir = '';
   let basePath = '';
   let contentRoots: string[] = [];
+  let cdnUrl: string | undefined;
+  /** process.env plus `MDX_MEDIA_*` from Vite's .env files */
+  let env: Record<string, string | undefined> = process.env;
   /** Missing images substituted per file, for the late transform to label */
   const missingByFile = new Map<string, string[]>();
 
@@ -59,13 +62,17 @@ export function mdxMediaManager(options: MdxMediaManagerViteOptions = {}): Plugi
       },
       async configResolved(config) {
         root = options.root ?? config.root;
+        const { loadEnv } = await import('vite');
+        env = { ...process.env, ...loadEnv(config.mode, config.envDir || root, 'MDX_MEDIA_') };
         contentRoots = [...detectContentRoots(root), ...(options.contentRoots ?? [])];
         const { resolveOptions } = await import('@mdx-media-manager/core');
         const resolved = resolveOptions({
           ...options,
           root,
           publicDir: options.publicDir ?? config.publicDir,
+          env,
         });
+        cdnUrl = resolved.s3?.cdnUrl;
         publicDir = resolved.publicDir;
         basePath = resolved.basePath;
       },
@@ -77,6 +84,7 @@ export function mdxMediaManager(options: MdxMediaManagerViteOptions = {}): Plugi
             ...options,
             root,
             contentRoots,
+            env,
             publicDir: options.publicDir ?? server.config.publicDir,
           }).handler,
         );
@@ -90,12 +98,13 @@ export function mdxMediaManager(options: MdxMediaManagerViteOptions = {}): Plugi
       // comes earlier) to see the raw MDX.
       transform: {
         order: 'pre',
-        handler(code, id) {
+        async handler(code, id) {
           const [file] = id.split('?');
           if (!file || !include.test(file) || id.includes('virtual:')) return;
-          const { code: patched, missing } = substituteMissingImages(code, {
+          const { code: patched, missing } = await substituteMissingImages(code, {
             resourcePath: file,
             publicDir,
+            cdnUrl,
           });
           missingByFile.set(file, missing);
           if (missing.length) return { code: patched, map: null };

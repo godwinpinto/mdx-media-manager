@@ -1,5 +1,6 @@
 import { existsSync } from 'node:fs';
 import path from 'node:path';
+import { resolveS3Options, s3OptionsFromEnv, type ResolvedS3Options, type S3Options } from './s3';
 
 export type ImageFormat = 'webp' | 'avif' | 'png' | 'jpeg';
 
@@ -46,12 +47,21 @@ export interface MediaManagerOptions {
    * (Fumadocs' convention).
    */
   pageUrl?: (file: string) => string | undefined;
+  /**
+   * Store images in S3 (or R2, MinIO, …) and reference them by CDN URL instead of writing to
+   * `public/`. @defaultValue read from `MDX_MEDIA_S3_*` / `MDX_MEDIA_CDN_URL`; `false` disables
+   */
+  s3?: S3Options | false;
+  /** Environment to read `MDX_MEDIA_*` from. @defaultValue process.env */
+  env?: Record<string, string | undefined>;
 }
 
 export interface ResolvedOptions {
   root: string;
   contentDir: string;
   contentRoots: string[];
+  /** Set when images are stored in S3 */
+  s3?: ResolvedS3Options;
   publicDir: string;
   imagesDir: string;
   basePath: string;
@@ -75,6 +85,10 @@ export function resolveOptions(options: MediaManagerOptions = {}): ResolvedOptio
     root,
     contentDir,
     contentRoots,
+    s3: (() => {
+      const s3 = options.s3 === false ? undefined : (options.s3 ?? s3OptionsFromEnv(options.env));
+      return s3 ? resolveS3Options(s3) : undefined;
+    })(),
     publicDir,
     imagesDir: path.resolve(publicDir, options.imagesDir ?? 'images'),
     basePath: (options.basePath ?? '/__mdx-media').replace(/\/$/, ''),

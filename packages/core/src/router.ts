@@ -21,6 +21,7 @@ export interface RouteContext {
 
 export interface Route {
   method: 'GET' | 'POST';
+  /** Return data (sent as JSON) or a Response */
   handle(ctx: RouteContext): Promise<unknown>;
 }
 
@@ -60,7 +61,8 @@ export function createRouter({ basePath, routes, onRequest, mapError }: RouterOp
     if (early) return early;
 
     try {
-      return json(200, await route.handle({ request, body: await readBody(request) }));
+      const result = await route.handle({ request, body: await readBody(request) });
+      return result instanceof Response ? result : json(200, result);
     } catch (error) {
       const mapped = mapError ? mapError(error) : error;
       if (mapped instanceof HttpError)

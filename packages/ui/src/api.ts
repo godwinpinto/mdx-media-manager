@@ -22,6 +22,9 @@ export interface Status {
   ok: true;
   image: Required<Pick<Output, 'format' | 'quality' | 'maxWidth'>>;
   maxUploadSize: number;
+  /** Where new images are stored */
+  storage: 'local' | 's3';
+  cdnUrl?: string;
 }
 
 export interface EditResponse {
@@ -134,6 +137,26 @@ export function createApi(basePath: string) {
       }),
 
     library: () => call<LibraryScan>('/library'),
+
+    /** An image's original bytes, fetched by the dev server (works for CDN URLs without CORS) */
+    source: async (url: string): Promise<Blob> => {
+      const res = await fetch(`${basePath}/images/source?url=${encodeURIComponent(url)}`);
+      if (!res.ok) throw new ApiError(res.status, 'NOT_FOUND', 'Could not load the image.');
+      return res.blob();
+    },
+
+    moveToS3: (urls: string[]) =>
+      json<{
+        moved: {
+          from: string;
+          to: string;
+          updated: string[];
+          failed: { file: string; message: string }[];
+          removed?: string;
+          kept: string[];
+        }[];
+        skipped: { url: string; reason: string }[];
+      }>('/library/move-to-s3', { urls }),
 
     renameEverywhere: (url: string, name: string) =>
       json<{

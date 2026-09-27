@@ -125,6 +125,20 @@ export async function* scopeFiles(scope: ContentScope, skip: string): AsyncGener
 }
 
 /**
+ * Whether `text` mentions `url`. A site path like `/images/a.png` only counts where it starts a
+ * path: not inside another URL (`https://cdn.example.com/images/a.png` is a different image), but
+ * yes after `public` (`../../public/images/a.png`).
+ */
+export function mentions(text: string, url: string): boolean {
+  if (!url.startsWith('/')) return text.includes(url);
+  for (let i = text.indexOf(url); i !== -1; i = text.indexOf(url, i + 1)) {
+    const before = text.slice(Math.max(0, i - 6), i);
+    if (before.endsWith('public') || !/[\w.:@%-]$/.test(before)) return true;
+  }
+  return false;
+}
+
+/**
  * Whether any project file (content, pages, components, config) still mentions `url`.
  * Deliberately a plain text search: a false positive only keeps a file around.
  */
@@ -136,7 +150,7 @@ export async function isReferenced(
 ): Promise<boolean> {
   for await (const file of scopeFiles({ root, contentRoots }, publicDir)) {
     const text = await fs.readFile(file, 'utf8').catch(() => '');
-    if (text.includes(url)) return true;
+    if (mentions(text, url)) return true;
   }
   return false;
 }

@@ -18,10 +18,24 @@ const isExternal = (url: string) => /^([a-z][a-z0-9+.-]*:|\/\/)/i.test(url);
  *
  * @returns the patched source and the original URLs, in document order
  */
-export function substituteMissingImages(
+/** CDN objects that exist never change (names contain a content hash): remember them. */
+const knownRemote = new Set<string>();
+
+async function remoteExists(url: string): Promise<boolean> {
+  if (knownRemote.has(url)) return true;
+  try {
+    const res = await fetch(url, { method: 'HEAD', signal: AbortSignal.timeout(5000) });
+    if (res.ok) knownRemote.add(url);
+    return res.ok || (res.status !== 404 && res.status !== 403 && res.status !== 410);
+  } catch {
+    return true; // offline or slow: don't hide images we can't check
+  }
+}
+
+export async function substituteMissingImages(
   source: string,
-  options: { resourcePath: string; publicDir: string },
-): { code: string; missing: string[] } {
+  options: { resourcePath: string; publicDir: string; cdnUrl?: string },
+): Promise<{ code: string; missing: string[] }> {
   const format: SourceFormat = options.resourcePath.endsWith('.md') ? 'md' : 'mdx';
   let tree;
   try {
@@ -32,7 +46,10 @@ export function substituteMissingImages(
 
   const replacement = pathToFileURL(placeholderFile).href;
   const s = new MagicString(source);
-  const missing: string[] = [];
+  /** Missing images: original URL and where it starts in the source */
+  const missing: { url: string; at: number }[] = [];
+  const remote: { url: string; at: number }[] = [];
+  const cdnPrefix = options.cdnUrl && `${options.cdnUrl.replace(/\/+$/, '')}/`;
 
   const visit = (node: any) => {
     // Only Markdown images become static imports; a JSX <img> to a missing file just 404s.
@@ -40,7 +57,16 @@ export function substituteMissingImages(
       const url = imageUrl(node);
       const start = node.position?.start.offset;
       const end = node.position?.end.offset;
-      if (url && !isExternal(url) && start !== undefined && end !== undefined) {
+      if (
+        url &&
+        cdnPrefix &&
+        url.startsWith(cdnPrefix) &&
+        start !== undefined &&
+        end !== undefined
+      ) {
+        const at = source.indexOf(url, start);
+        if (at !== -1 && at < end) remote.push({ url, at });
+      } else if (url && !isExternal(url) && start !== undefined && end !== undefined) {
         const clean = decodeURIComponent(url.split(/[?#]/)[0]!);
         const file = clean.startsWith('/')
           ? path.join(options.publicDir, clean)
@@ -48,7 +74,7 @@ export function substituteMissingImages(
         const at = source.indexOf(url, start);
         if (!existsSync(file) && at !== -1 && at < end) {
           s.overwrite(at, at + url.length, replacement);
-          missing.push(url);
+          missing.push({ url, at });
         }
       }
     }
@@ -56,5 +82,15 @@ export function substituteMissingImages(
   };
   visit(tree);
 
-  return { code: missing.length ? s.toString() : source, missing };
+  // Fumadocs fetches remote image sizes while compiling, so a missing CDN object fails too.
+  const checks = await Promise.all(remote.map((image) => remoteExists(image.url)));
+  remote.forEach((image, i) => {
+    if (checks[i]) return;
+    s.overwrite(image.at, image.at + image.url.length, replacement);
+    missing.push(image);
+  });
+
+  // Report in document order, the order the compiled images appear in.
+  const ordered = missing.sort((a, b) => a.at - b.at).map((image) => image.url);
+  return { code: ordered.length ? s.toString() : source, missing: ordered };
 }

@@ -23,30 +23,54 @@ const options = () => ({
 const placeholder = pathToFileURL(placeholderFile).href;
 
 describe('substituteMissingImages', () => {
-  it('replaces only missing local Markdown images, in order', () => {
+  it('replaces only missing local Markdown images, in order', async () => {
     const source = [
       '![a](/images/here.png)',
       '![b](/images/gone.png) and ![c](./local.png) and ![d](./nope.png)',
       '![e](https://example.com/x.png)',
       '<img src="/images/gone-jsx.png" />',
     ].join('\n\n');
-    const { code, missing } = substituteMissingImages(source, options());
+    const { code, missing } = await substituteMissingImages(source, options());
     expect(missing).toEqual(['/images/gone.png', './nope.png']);
     expect(code).toContain('![a](/images/here.png)');
     expect(code).toContain(`![b](${placeholder}) and ![c](./local.png) and ![d](${placeholder})`);
     expect(code).toContain('<img src="/images/gone-jsx.png" />');
   });
 
-  it('keeps line numbers', () => {
+  it('keeps line numbers', async () => {
     const source = 'Intro\n\n![x](/images/gone.png)\n\n## Next\n';
-    const { code } = substituteMissingImages(source, options());
+    const { code } = await substituteMissingImages(source, options());
     expect(code.split('\n')).toHaveLength(source.split('\n').length);
     expect(code.split('\n')[4]).toBe('## Next');
   });
 
-  it('leaves unparsable sources to the real compiler', () => {
+  it('leaves unparsable sources to the real compiler', async () => {
     const source = '<Broken\n';
-    expect(substituteMissingImages(source, options())).toEqual({ code: source, missing: [] });
+    expect(await substituteMissingImages(source, options())).toEqual({ code: source, missing: [] });
+  });
+});
+
+describe('missing CDN images', () => {
+  it('checks CDN URLs and substitutes the ones that 404', async () => {
+    const { createServer } = await import('node:http');
+    const server = createServer((req, res) => {
+      res.statusCode = req.url?.includes('here') ? 200 : 404;
+      res.end();
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const cdn = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
+    try {
+      const source = `![a](${cdn}/images/here.webp)\n\n![b](${cdn}/images/gone.webp)\n\n![c](/images/gone-local.png)\n`;
+      const { code, missing } = await substituteMissingImages(source, {
+        ...options(),
+        cdnUrl: cdn,
+      });
+      expect(missing).toEqual([`${cdn}/images/gone.webp`, '/images/gone-local.png']);
+      expect(code).toContain(`![a](${cdn}/images/here.webp)`);
+      expect(code).toContain(`![b](${placeholder})`);
+    } finally {
+      server.close();
+    }
   });
 });
 

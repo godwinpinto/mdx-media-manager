@@ -24,6 +24,7 @@
     "types:check": "tsc --noEmit"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1141.0",
     "magic-string": "^1.4.2",
     "remark-frontmatter": "^5.0.0",
     "remark-gfm": "^4.0.1",
@@ -37,6 +38,8 @@
   "devDependencies": {
     "@types/mdast": "^4.0.4",
     "@types/node": "^26.6.1",
+    "aws-sdk-client-mock": "^4.1.0",
+    "s3rver": "^3.7.1",
     "tsconfig": "workspace:*",
     "tsdown": "0.23.0",
     "typescript": "^7.0.2",

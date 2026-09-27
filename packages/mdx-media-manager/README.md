@@ -96,7 +96,7 @@ other public image your content uses:
 - **Insert from the library**: the Insert dialog has a _From library_ tab that reuses an existing
   file instead of uploading a copy.
 
-Missing images don't break your dev server: Fumadocs turns images into imports, so one missing
+Missing images (local files or CDN objects) don't break your dev server: Fumadocs turns images into imports, so one missing
 file would fail every page. In development they're shown as a _Missing image_ placeholder you can
 hover to replace or remove. Production builds still fail on broken references, as they should.
 
@@ -131,6 +131,47 @@ values written as plain strings in `defineDocs`, `defineCollections` or
 Not supported: generated or remote content (OpenAPI pages, remote MDX, CMS sources), since there is
 no local file to edit. Collections compiled with Fumadocs' experimental `compiler: 'satteri'`
 haven't been tested.
+
+## Storing images in S3 (optional)
+
+Set these (e.g. in `.env.local`) and new or replaced images are uploaded to the bucket instead of
+`public/`, and referenced by their CDN URL:
+
+```bash
+MDX_MEDIA_S3_BUCKET=my-docs-images
+MDX_MEDIA_CDN_URL=https://images.example.com     # public URL the bucket is served from
+MDX_MEDIA_S3_REGION=us-east-1                    # default: "auto" when an endpoint is set
+MDX_MEDIA_S3_ACCESS_KEY_ID=…                     # omit both keys to use your AWS profile / SSO
+MDX_MEDIA_S3_SECRET_ACCESS_KEY=…
+# MDX_MEDIA_S3_ENDPOINT=https://<account>.r2.cloudflarestorage.com   # R2, MinIO, Spaces, …
+# MDX_MEDIA_S3_PREFIX=images                     # key prefix (default: images)
+# MDX_MEDIA_S3_FORCE_PATH_STYLE=true             # MinIO
+```
+
+- Pages reference `https://images.example.com/images/docs/guide/hero-1a2b3c4d.webp`. Objects are
+  uploaded with `Cache-Control: public, max-age=31536000, immutable`, which is safe because names
+  contain a content hash.
+- Replace, rename and delete work on the bucket with the same rule as local files: an object is
+  deleted only when no project file references its URL any more.
+- The library shows the bucket images your pages use (thumbnails, usages, rename, alt text) but
+  doesn't list the bucket itself, so _Unused_ only covers local files. _Broken_ includes CDN URLs
+  whose object is missing, and in development these render as a placeholder instead of failing
+  the page.
+- **Move to S3**: with S3 configured, the library can upload local images (one, or all at once),
+  rewrite every page to the CDN URL, and delete the local file once nothing else uses it.
+- Credentials stay in the dev server; the browser never sees them. Cloudflare R2 works with
+  `MDX_MEDIA_S3_ENDPOINT` and an R2 API token.
+
+**Next.js production:** `next/image` only loads remote hosts listed in your config, and this
+package isn't loaded in production, so add the CDN yourself:
+
+```js
+const config = {
+  images: { remotePatterns: [new URL('https://images.example.com/**')] },
+};
+```
+
+Fumadocs also fetches remote image sizes during the build, so the CDN must be reachable from it.
 
 ## Options
 

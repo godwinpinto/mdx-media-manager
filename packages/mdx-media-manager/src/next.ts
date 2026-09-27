@@ -74,6 +74,31 @@ function wrapWebpackRules(
   }
 }
 
+/**
+ * Let `next/image` load images from the CDN during development. Production builds don't load
+ * this package, so add the same `images.remotePatterns` entry to your config (see README).
+ */
+function withCdnImages(
+  images: NextConfig['images'],
+  cdnUrl: string | undefined,
+): NextConfig['images'] {
+  if (!cdnUrl) return images;
+  const url = new URL(cdnUrl);
+  const pattern = {
+    protocol: url.protocol.replace(':', '') as 'http' | 'https',
+    hostname: url.hostname,
+    port: url.port,
+    pathname: `${url.pathname.replace(/\/$/, '')}/**`,
+  };
+  const local = /^(localhost|127(?:\.\d+){3}|\[::1\])$/.test(url.hostname);
+  return {
+    ...images,
+    remotePatterns: [...(images?.remotePatterns ?? []), pattern],
+    // A local S3 server (MinIO) as "CDN": Next refuses to optimize images from local IPs otherwise.
+    ...(local ? { dangerouslyAllowLocalIP: true } : {}),
+  };
+}
+
 /** Start the API once per dev server process tree and remember where it listens. */
 async function ensureServer(options: MediaManagerOptions): Promise<string> {
   const existing = process.env[SERVER_URL_ENV];
@@ -123,6 +148,7 @@ export function withMdxMediaManager(
       basePath: resolvedOptions.basePath,
       // By file path: MDX files outside the app (shared content) can't resolve the package name.
       clientModule: fileURLToPath(new URL('./client.js', import.meta.url)),
+      cdnUrl: resolvedOptions.s3?.cdnUrl,
     };
 
     const ours = [
@@ -134,6 +160,7 @@ export function withMdxMediaManager(
 
     return {
       ...resolved,
+      images: withCdnImages(resolved.images, resolvedOptions.s3?.cdnUrl),
       turbopack: {
         ...resolved.turbopack,
         rules: wrapTurbopackRules(resolved.turbopack?.rules, names, base) as NonNullable<

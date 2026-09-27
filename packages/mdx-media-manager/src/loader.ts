@@ -12,6 +12,8 @@ export interface LoaderOptions {
   publicDir: string;
   basePath: string;
   clientModule: string;
+  /** Public URL of the S3 bucket, when images are stored there */
+  cdnUrl?: string;
 }
 
 type Callback = (err: Error | null | undefined, code?: string, map?: unknown) => void;
@@ -47,11 +49,8 @@ export default function loader(this: LoaderContext, source: string): void {
   const options = this.getOptions();
   const callback = this.async();
   const resourcePath = this.resourcePath;
-  const { code: patched, missing } = substituteMissingImages(source, {
-    resourcePath,
-    publicDir: options.publicDir,
-  });
 
+  let missing: string[] = [];
   const finish: Callback = (err, code, map) => {
     if (err || code === undefined) return callback(err);
     try {
@@ -86,9 +85,17 @@ export default function loader(this: LoaderContext, source: string): void {
     },
   });
 
-  loadInner(options.inner, this.rootContext)
-    .then((inner) => {
-      const result = inner.call(context, patched);
+  Promise.all([
+    loadInner(options.inner, this.rootContext),
+    substituteMissingImages(source, {
+      resourcePath,
+      publicDir: options.publicDir,
+      cdnUrl: options.cdnUrl,
+    }),
+  ])
+    .then(([inner, substituted]) => {
+      missing = substituted.missing;
+      const result = inner.call(context, substituted.code);
       if (typeof result === 'string') finish(null, result);
     })
     .catch((err: Error) => callback(err));

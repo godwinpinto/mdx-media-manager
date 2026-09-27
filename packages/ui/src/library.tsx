@@ -100,6 +100,7 @@ export function ImageGrid({
               <span className="badge">
                 {image.usages.length} use{image.usages.length === 1 ? '' : 's'}
               </span>
+              {image.storage === 's3' && <span className="badge s3">S3</span>}
               {unused && <span className="badge warn">unused</span>}
               {missingAlt && <span className="badge warn">no alt</span>}
             </span>
@@ -172,10 +173,13 @@ function UsageList({ usages }: { usages: LibraryUsage[] }) {
 function Details({
   api,
   image,
+  storage,
   onChanged,
 }: {
   api: Api;
   image: LibraryImage;
+  /** Where new images go; `s3` enables moving local images there */
+  storage: 'local' | 's3';
   onChanged(message: string, selectUrl?: string): Promise<void>;
 }) {
   const initialName = image.name.replace(/\.[^.]+$/, '').replace(/-[0-9a-f]{8}$/, '');
@@ -184,6 +188,7 @@ function Details({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [confirmMove, setConfirmMove] = useState(false);
   const [similar, setSimilar] = useState<string[]>([]);
 
   const nameCheck = checkName(name);
@@ -234,6 +239,8 @@ function Details({
         <dd>
           <code>{image.url}</code>
         </dd>
+        <dt>Stored</dt>
+        <dd>{image.storage === 's3' ? 'S3 bucket, served from the CDN' : 'Public folder'}</dd>
         <dt>Size</dt>
         <dd>
           {image.width && image.height ? `${image.width} × ${image.height} px · ` : ''}
@@ -347,6 +354,32 @@ function Details({
         <button type="button" onClick={() => navigator.clipboard?.writeText(image.url)}>
           Copy URL
         </button>
+        {storage === 's3' && image.storage === 'local' && (
+          <button
+            type="button"
+            className={confirmMove ? 'primary' : ''}
+            disabled={busy}
+            title="Upload to the bucket and point every page at the CDN URL"
+            onClick={() =>
+              confirmMove
+                ? run(async () => {
+                    const result = await api.moveToS3([image.url]);
+                    const moved = result.moved[0];
+                    if (!moved) throw new Error(result.skipped[0]?.reason ?? 'Not moved.');
+                    const kept = moved.kept.length
+                      ? ` Local file kept: still used in ${moved.kept.join(', ')}.`
+                      : '';
+                    return {
+                      message: `Moved to S3; updated ${pages(moved.updated)}.${kept}`,
+                      selectUrl: moved.to,
+                    };
+                  })
+                : setConfirmMove(true)
+            }
+          >
+            {confirmMove ? 'Confirm move to S3' : 'Move to S3'}
+          </button>
+        )}
         {unused && image.managed && (
           <button
             type="button"
@@ -375,10 +408,12 @@ export function LibraryPanel({
   api,
   onClose,
   currentFile,
+  storage = 'local',
 }: {
   api: Api;
   onClose(): void;
   currentFile?: string;
+  storage?: 'local' | 's3';
 }) {
   const { scan, error, loading, reload } = useLibrary(api);
   const [query, setQuery] = useState('');
@@ -388,6 +423,7 @@ export function LibraryPanel({
   const [message, setMessage] = useState<string>();
   const [confirmBulk, setConfirmBulk] = useState(false);
   const [bulkBusy, setBulkBusy] = useState(false);
+  const [confirmMoveAll, setConfirmMoveAll] = useState(false);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
@@ -429,6 +465,34 @@ export function LibraryPanel({
     setMessage(text);
     await reload();
     setSelected(selectUrl);
+  }
+
+  // Local images pages use (unused ones are better deleted than uploaded)
+  const movable =
+    storage === 's3' ? images.filter((image) => image.storage === 'local' && !isUnused(image)) : [];
+
+  async function moveAllToS3() {
+    if (!confirmMoveAll) return setConfirmMoveAll(true);
+    setConfirmMoveAll(false);
+    setBulkBusy(true);
+    try {
+      const result = await api.moveToS3(movable.map((image) => image.url));
+      const kept = result.moved.filter((m) => m.kept.length).length;
+      setMessage(
+        `Moved ${result.moved.length} image${result.moved.length === 1 ? '' : 's'} to S3.` +
+          (kept
+            ? ` ${kept} local file${kept === 1 ? '' : 's'} kept because code still uses them.`
+            : '') +
+          (result.skipped.length
+            ? ` Skipped ${result.skipped.length}: ${result.skipped[0]!.reason}`
+            : ''),
+      );
+      await reload();
+    } catch (e) {
+      setMessage((e as Error).message);
+    } finally {
+      setBulkBusy(false);
+    }
   }
 
   async function deleteAllUnused() {
@@ -504,6 +568,19 @@ export function LibraryPanel({
               </button>
             ))}
           </div>
+          {movable.length > 0 && (
+            <button
+              type="button"
+              className={`move-all ${confirmMoveAll ? 'primary' : ''}`}
+              disabled={bulkBusy}
+              onClick={moveAllToS3}
+              title="Upload local images that pages use to the bucket and rewrite them to CDN URLs"
+            >
+              {confirmMoveAll
+                ? `Confirm: move ${movable.length} to S3`
+                : `Move ${movable.length} local to S3`}
+            </button>
+          )}
           <select
             value={page}
             onChange={(e) => setPage(e.currentTarget.value)}
@@ -574,6 +651,7 @@ export function LibraryPanel({
               key={selectedImage.url}
               api={api}
               image={selectedImage}
+              storage={storage}
               onChanged={onChanged}
             />
           )}

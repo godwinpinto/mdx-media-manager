@@ -2,9 +2,14 @@ import { createMDX } from 'fumadocs-mdx/next';
 
 const withMDX = createMDX();
 
+// Images stored in S3 are referenced by CDN URL; next/image only loads remote hosts it's told
+// about. This is needed in production too (mdx-media-manager only adds it during `next dev`).
+const cdnUrl = process.env.MDX_MEDIA_CDN_URL?.replace(/\/+$/, '');
+
 /** @type {import('next').NextConfig} */
 const config = {
   reactStrictMode: true,
+  images: cdnUrl ? { remotePatterns: [new URL(`${cdnUrl}/**`)] } : undefined,
 };
 
 // `shared/handbook` lives outside this app and is served at /handbook (see lib/source.ts).

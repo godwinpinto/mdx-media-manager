@@ -1,17 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { z } from 'zod';
-import {
-  existsSync,
-  imageFolderFor,
-  isInside,
-  publicFileOf,
-  publicUrlOf,
-  resolveSourceFile,
-  slugify,
-  withFileLock,
-  writeAtomic,
-} from './fs';
+import { resolveSourceFile, slugify, withFileLock, writeAtomic } from './fs';
 import { extensionOf, processImage } from './image';
 import { EditError } from './mdx/errors';
 import { findImageUrl, insertImage, removeImage, replaceImage } from './mdx/edit';
@@ -19,7 +9,7 @@ import { hashSource } from './mdx/hash';
 import { formatOf } from './mdx/parse';
 import { resolveOptions, type MediaManagerOptions, type ResolvedOptions } from './options';
 import { createRouter, HttpError, json } from './router';
-import { copyUnderName, removeIfOrphaned as removeIfOrphanedFile } from './images';
+import { createImageStorage, type ImageStorage } from './images';
 import { createLibrary, defaultPageUrl } from './library';
 import { checkRequest } from './security';
 
@@ -99,11 +89,11 @@ export const insertExistingBody = z.object({
   target,
   position: z.enum(['before', 'after']),
   alt: z.string().max(500),
-  /** Public URL of an image that already exists, e.g. `/images/a/b.webp` */
-  url: z.string().min(2).max(2048).startsWith('/'),
+  /** URL of an image that already exists: `/images/a/b.webp`, or a CDN URL when using S3 */
+  url: z.string().min(2).max(2048),
 });
 
-const libraryUrl = z.string().min(2).max(2048).startsWith('/');
+const libraryUrl = z.string().min(2).max(2048);
 export const libraryRenameBody = z.object({
   url: libraryUrl,
   name: z.string().trim().min(1).max(100),
@@ -168,7 +158,7 @@ function readUpload<T>(body: unknown, schema: z.ZodType<T>): { file: File; meta:
   return { file, meta: schema.parse(JSON.parse(meta)) };
 }
 
-function createOperations(options: ResolvedOptions) {
+function createOperations(options: ResolvedOptions, storage: ImageStorage) {
   /** Read the source and make sure it is the revision the page was rendered from. */
   async function readSource(file: string, hash: string): Promise<string> {
     const text = await fs.readFile(file, 'utf8');
@@ -195,26 +185,19 @@ function createOperations(options: ResolvedOptions) {
       crop: meta.crop,
     });
     const base = slugify(meta.name ?? path.parse(file.name).name);
-    const imageFile = path.join(
-      imageFolderFor(options, sourceFile),
-      `${base}-${processed.hash}.${extensionOf(processed.format)}`,
-    );
-    if (!isInside(options.publicDir, imageFile))
-      throw new EditError('INVALID', 'Invalid image location.');
-
-    const created = !existsSync(imageFile);
-    if (created) await writeAtomic(imageFile, processed.data);
+    const name = `${base}-${processed.hash}.${extensionOf(processed.format)}`;
+    const stored = await storage.write(sourceFile, name, processed.data);
     return {
-      url: publicUrlOf(options.publicDir, imageFile),
+      url: stored.url,
       width: processed.width,
       height: processed.height,
       /** Undo the write when the source edit fails */
-      discard: () => (created ? fs.rm(imageFile, { force: true }) : Promise.resolve()),
+      discard: () => stored.discard?.() ?? Promise.resolve(),
     };
   }
 
-  const removeIfOrphaned = (url: string | undefined) => removeIfOrphanedFile(options, url);
-  const renameImage = (url: string, name: string) => copyUnderName(options, url, name);
+  const removeIfOrphaned = (url: string | undefined) => storage.removeIfOrphaned(url);
+  const renameImage = (url: string, name: string) => storage.copyUnderName(url, name);
 
   async function commit(sourceFile: string, next: string, discard?: () => Promise<unknown>) {
     try {
@@ -264,9 +247,8 @@ function createOperations(options: ResolvedOptions) {
     /** Place an image that is already in the public folder (from the library). */
     async insertExisting(body: InsertExistingBody): Promise<EditResponse> {
       const sourceFile = await resolveSourceFile(options, body.file);
-      const imageFile = publicFileOf(options.publicDir, body.url);
-      if (!imageFile || !existsSync(imageFile)) {
-        throw new EditError('NOT_FOUND', `Image not found in the public folder: ${body.url}`);
+      if (!(await storage.exists(body.url))) {
+        throw new EditError('NOT_FOUND', `Image not found: ${body.url}`);
       }
       return withFileLock(sourceFile, async () => {
         const text = await readSource(sourceFile, body.hash);
@@ -337,26 +319,10 @@ function createOperations(options: ResolvedOptions) {
      */
     async similarNames(query: NamesQuery): Promise<{ matches: string[] }> {
       // Renames stay in the image's folder; new images go to the page's folder.
-      const currentFile = query.url ? publicFileOf(options.publicDir, query.url) : undefined;
-      const folder = currentFile
-        ? path.dirname(currentFile)
-        : imageFolderFor(options, await resolveSourceFile(options, query.file!));
-      if (folder !== options.publicDir && !isInside(options.publicDir, folder))
-        return { matches: [] };
-
-      const slug = slugify(query.name);
-      const entries = await fs.readdir(folder).catch(() => [] as string[]);
-      const matches = entries
-        .filter((entry) => {
-          const base = path.parse(entry).name;
-          return (
-            base === slug ||
-            (base.startsWith(`${slug}-`) && /^[0-9a-f]{8}$/.test(base.slice(slug.length + 1)))
-          );
-        })
-        .map((entry) => publicUrlOf(options.publicDir, path.join(folder, entry)))
-        .filter((url) => url !== query.url);
-      return { matches };
+      const sourceFile = query.url ? undefined : await resolveSourceFile(options, query.file!);
+      return {
+        matches: await storage.similar(slugify(query.name), { url: query.url, sourceFile }),
+      };
     },
 
     async delete(body: DeleteBody): Promise<EditResponse> {
@@ -374,8 +340,13 @@ function createOperations(options: ResolvedOptions) {
 
 export function createMediaManager(input: MediaManagerOptions = {}) {
   const options = resolveOptions(input);
-  const operations = createOperations(options);
-  const library = createLibrary(options, (file) => input.pageUrl?.(file) ?? defaultPageUrl(file));
+  const storage = createImageStorage(options);
+  const operations = createOperations(options, storage);
+  const library = createLibrary(
+    options,
+    storage,
+    (file) => input.pageUrl?.(file) ?? defaultPageUrl(file),
+  );
 
   const handler = createRouter({
     basePath: options.basePath,
@@ -387,7 +358,21 @@ export function createMediaManager(input: MediaManagerOptions = {}) {
           ok: true,
           image: options.image,
           maxUploadSize: options.maxUploadSize,
+          storage: storage.kind,
+          cdnUrl: options.s3?.cdnUrl,
         }),
+      },
+      '/images/source': {
+        method: 'GET',
+        // Serves an image's original bytes to the editor, so it works for CDN URLs without CORS.
+        handle: async ({ request }) => {
+          const url = new URL(request.url).searchParams.get('url') ?? '';
+          const image = await storage.read(url);
+          if (!image) throw new HttpError(404, 'NOT_FOUND', `Image not found: ${url}`);
+          return new Response(Buffer.from(image.data), {
+            headers: { 'content-type': image.contentType, 'cache-control': 'no-store' },
+          });
+        },
       },
       '/library': {
         method: 'GET',
@@ -410,6 +395,10 @@ export function createMediaManager(input: MediaManagerOptions = {}) {
       '/library/delete': {
         method: 'POST',
         handle: ({ body }) => library.deleteUnused(libraryDeleteBody.parse(body).urls),
+      },
+      '/library/move-to-s3': {
+        method: 'POST',
+        handle: ({ body }) => library.moveToS3(libraryDeleteBody.parse(body).urls),
       },
       '/images/insert-existing': {
         method: 'POST',
