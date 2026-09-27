@@ -20,6 +20,10 @@ const PHASE_DEVELOPMENT_SERVER = 'phase-development-server';
 const SERVER_URL_ENV = '__MDX_MEDIA_MANAGER_URL';
 const defaultLoaders = ['fumadocs-mdx/webpack/mdx', '@mdx-js/loader'];
 
+function withoutUndefined<T extends object>(value: T): Partial<T> {
+  return Object.fromEntries(Object.entries(value).filter(([, v]) => v !== undefined)) as Partial<T>;
+}
+
 type LoaderItem = string | { loader: string; options?: unknown };
 
 function wrapLoaders<T extends LoaderItem>(
@@ -30,11 +34,12 @@ function wrapLoaders<T extends LoaderItem>(
   return items.map((item) => {
     const name = typeof item === 'string' ? item : item.loader;
     if (!names.includes(name)) return item;
-    const options: LoaderOptions = {
+    // Turbopack only accepts plain, serializable options: leave out anything undefined.
+    const options = withoutUndefined({
       ...base,
       inner: name,
       innerOptions: typeof item === 'string' ? undefined : item.options,
-    };
+    }) as LoaderOptions;
     const rest: object = typeof item === 'string' ? {} : item;
     return { ...rest, loader: 'mdx-media-manager/loader', options } as T;
   });
