@@ -110,6 +110,31 @@ export function insertImage(source: string, input: InsertImageInput, format: Sou
   const tree = parse(source, format);
   let anchor = toFlow(locate(tree, input.target));
 
+  // In a tight list, a new block would need blank lines, which makes the whole list loose (the
+  // items get paragraph spacing). Put the image on its own line in the item's paragraph instead.
+  const item =
+    anchor.node.type === 'listItem'
+      ? anchor.node
+      : anchor.parent.type === 'listItem'
+        ? anchor.parent
+        : undefined;
+  const list = item && (anchor.node === item ? anchor.parent : anchor.ancestors.at(-2));
+  if (item && list?.type === 'list' && !list.spread && !item.spread) {
+    const paragraph =
+      anchor.node.type === 'paragraph'
+        ? anchor.node
+        : item.children.find((child) => child.type === 'paragraph');
+    if (paragraph) {
+      const tight = insertInParagraph(
+        source,
+        paragraph,
+        input.position,
+        markdownImage(input.alt, input.url),
+      );
+      if (staysTight(tight, list, format)) return verify(tight, format, input.url);
+    }
+  }
+
   // A list item holds blocks itself: put the image inside it, next to its content.
   if (anchor.node.type === 'listItem' && anchor.node.children.length > 0) {
     const children = anchor.node.children;
@@ -158,6 +183,38 @@ function resolveImage(
   if (!found)
     throw new EditError('NOT_FOUND', 'The image was not found. The file may have changed.');
   return found as Located & { node: ImageNode };
+}
+
+/** Put an image on its own line at the start or end of a paragraph (a soft line break). */
+function insertInParagraph(
+  source: string,
+  paragraph: Nodes,
+  position: 'before' | 'after',
+  image: string,
+): string {
+  const start = startOf(paragraph);
+  const prefix = continuationPrefix(source, start);
+  const s = new MagicString(source);
+  if (position === 'after') s.appendLeft(endOf(paragraph), `\n${prefix}${image}`);
+  else s.prependRight(start, `${image}\n${prefix}`);
+  return s.toString();
+}
+
+/** Whether the list that started at the same place is still tight after an edit. */
+function staysTight(result: string, list: Nodes, format: SourceFormat): boolean {
+  const offset = list.position?.start.offset;
+  let tight = false;
+  const visit = (node: Nodes) => {
+    if (node.type === 'list' && node.position?.start.offset === offset) {
+      tight = !node.spread && node.children.every((child) => !child.spread);
+    } else if ('children' in node) node.children.forEach((child) => visit(child as Nodes));
+  };
+  try {
+    visit(parse(result, format));
+  } catch {
+    return false;
+  }
+  return tight;
 }
 
 /** Point an existing image at a new URL (and optionally new alt text). */
@@ -319,8 +376,26 @@ export function removeImage(source: string, ref: ImageRef, format: SourceFormat)
   const start = startOf(block);
   const end = endOf(block);
 
+  const lineS = lineStart(source, start);
+  const lineE = lineEnd(source, end);
+  const restOfLineBlank = isBlank(source.slice(end, lineE));
+  const inParagraph = parent.type === 'paragraph' && !aloneInParagraph;
+
   if ((aloneInParagraph || node.type === 'mdxJsxFlowElement') && ownsLines(source, start, end)) {
     removeLines(s, source, start, end);
+  } else if (
+    inParagraph &&
+    restOfLineBlank &&
+    lineS > startOf(parent) &&
+    isBlank(source.slice(lineS, start))
+  ) {
+    // On its own line after other text (e.g. in a tight list item): drop the line.
+    s.remove(lineS - 1, lineE);
+  } else if (inParagraph && restOfLineBlank && lineE < endOf(parent)) {
+    // First on its line, with more text below: drop it and the line break after it.
+    let to = lineE + 1;
+    while (to < source.length && /[ \t>]/.test(source[to]!)) to++;
+    s.remove(start, to);
   } else {
     // Inline among text: drop the image and one space next to it.
     let to = end;

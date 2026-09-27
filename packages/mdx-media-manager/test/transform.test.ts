@@ -75,6 +75,15 @@ describe('transformCompiledMdx', () => {
     expect(out).toContain(tag(source, '1:1', 'h2', 1));
   });
 
+  it('records the components an element is inside', async () => {
+    const source = `<Steps>\n<Step>\n\n### One\n\nText.\n\n</Step>\n</Steps>\n`;
+    const out = await run(source);
+    // The heading is inside Step (2:1) inside Steps (1:1); Step itself is inside Steps.
+    expect(out).toMatch(/"data-mmm": "[^"]*\|4:1\|h3", "data-mmm-in": "1:1\|Steps;2:1\|Step"/);
+    expect(out).toMatch(/"data-mmm": "[^"]*\|2:1\|Step", "data-mmm-in": "1:1\|Steps"/);
+    expect(out).not.toMatch(/\|1:1\|Steps", "data-mmm-in"/);
+  });
+
   it('wraps the default export with the overlay', async () => {
     const out = await run('Hello\n');
     expect(out).not.toMatch(/export default function MDXContent\b/);

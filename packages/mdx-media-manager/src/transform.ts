@@ -12,6 +12,11 @@ import MagicString from 'magic-string';
 export const SOURCE_ATTR = 'data-mmm';
 /** The image URL as written in source, on rendered images */
 export const IMAGE_ATTR = 'data-mmm-img';
+/**
+ * `<line>:<column>|<Component>;…`: the components (outermost first, same file) an element is
+ * rendered inside. Lets the overlay find components that don't pass `data-mmm` through to the DOM.
+ */
+export const WITHIN_ATTR = 'data-mmm-in';
 /** Set on images whose file doesn't exist (rendered as a placeholder) */
 export const MISSING_ATTR = 'data-mmm-missing';
 
@@ -186,8 +191,11 @@ export function transformCompiledMdx(code: string, options: TransformOptions): s
     });
   };
 
-  const walk = (node: AnyNode, parentTag: string | undefined): void => {
+  const isComponent = (element: string) => /^[A-Z]/.test(element);
+
+  const walk = (node: AnyNode, parentTag: string | undefined, within: string[]): void => {
     let tag = parentTag;
+    let inner = within;
 
     if (node.type === 'ArrayExpression')
       tagSiblings((node.elements as (AnyNode | null)[]).filter((e): e is AnyNode => !!e));
@@ -199,14 +207,23 @@ export function transformCompiledMdx(code: string, options: TransformOptions): s
       if (element && props?.type === 'ObjectExpression') {
         const own = positionTag(node);
         const sibling = siblingTags.get(node);
+        const written = own ?? sibling ?? (element === 'img' ? parentTag : undefined);
+        if (written) {
+          // Generated image nodes have no position: they point at the block that contains them.
+          addProp(props, SOURCE_ATTR, written);
+          const file = written.split('|')[0];
+          const chain = within
+            .filter((entry) => entry.startsWith(`${file}|`))
+            .map((entry) => entry.slice(file!.length + 1));
+          if (chain.length) addProp(props, WITHIN_ATTR, chain.join(';'));
+        }
         if (own) {
           tag = own;
-          addProp(props, SOURCE_ATTR, own);
-        } else if (sibling) {
-          addProp(props, SOURCE_ATTR, sibling);
-        } else if (element === 'img' && parentTag) {
-          // Generated image nodes have no position: point at the block that contains them.
-          addProp(props, SOURCE_ATTR, parentTag);
+          if (isComponent(element)) {
+            // `file|line:column|Component` for descendants; the hash is the file's, not needed twice.
+            const [file, , position] = own.split('|');
+            inner = [...within, `${file}|${position}|${element}`];
+          }
         }
 
         if (element === 'img' || element === 'Image') {
@@ -228,13 +245,13 @@ export function transformCompiledMdx(code: string, options: TransformOptions): s
       if (key === 'type' || key === 'start' || key === 'end') continue;
       const value = node[key];
       if (Array.isArray(value)) {
-        for (const child of value) if (isNode(child)) walk(child, tag);
+        for (const child of value) if (isNode(child)) walk(child, tag, inner);
       } else if (isNode(value)) {
-        walk(value, tag);
+        walk(value, tag, inner);
       }
     }
   };
-  walk(ast, undefined);
+  walk(ast, undefined, []);
 
   injectOverlay(ast, s, options);
   return s.toString();

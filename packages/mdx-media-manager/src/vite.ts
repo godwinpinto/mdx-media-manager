@@ -1,5 +1,6 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import type { MediaManagerOptions } from '@mdx-media-manager/core';
 import type { Plugin } from 'vite';
 import { detectContentRoots } from './fumadocs';
@@ -49,8 +50,12 @@ export function mdxMediaManager(options: MdxMediaManagerViteOptions = {}): Plugi
         return this.resolve(id, path.join(root, 'index.js'), { skipSelf: true });
       },
       config() {
-        // Pre-bundle the overlay up front instead of re-optimizing on the first MDX page.
-        return { optimizeDeps: { include: [clientModule] } };
+        // Pre-bundle the overlay up front instead of re-optimizing on the first MDX page. Skipped
+        // when this package is linked from a workspace: pre-bundled copies don't pick up rebuilds.
+        const installed = fileURLToPath(import.meta.url)
+          .split(path.sep)
+          .includes('node_modules');
+        return installed ? { optimizeDeps: { include: [clientModule] } } : undefined;
       },
       async configResolved(config) {
         root = options.root ?? config.root;

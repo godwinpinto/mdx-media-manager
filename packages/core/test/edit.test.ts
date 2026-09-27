@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { EditError, insertImage, listImageUrls, removeImage, replaceImage } from '../src/mdx';
+import {
+  EditError,
+  insertImage,
+  listImageUrls,
+  parse,
+  removeImage,
+  replaceImage,
+} from '../src/mdx';
 
 const doc = `---
 title: Demo
@@ -83,15 +90,14 @@ describe('insertImage', () => {
     expect(out).toContain('</Callout>\n\n![New](/x.webp)\n\n- one');
   });
 
-  it('inserts inside a list item, indented to its content', () => {
+  it('keeps a tight list tight: the image goes on its own line in the item', () => {
     const out = insertImage(
       doc,
       { target: { line: 13, column: 1, element: 'li' }, position: 'after', ...img('/x.webp') },
       'mdx',
     );
-    expect(out).toContain('- one\n\n  ![New](/x.webp)\n- two');
+    expect(out).toContain('- one\n  ![New](/x.webp)\n- two');
   });
-
   it('inserts after a whole list', () => {
     const out = insertImage(
       doc,
@@ -160,6 +166,64 @@ describe('insertImage', () => {
       'mdx',
     );
     expect(out.replace('\n\n![New](/x.webp)', '')).toBe(doc);
+  });
+});
+
+describe('lists', () => {
+  const tight = `Intro.\n\n- one\n- two\n  - nested\n- three\n`;
+  const loose = `- one\n\n- two\n`;
+  const at = (line: number, column = 1) => ({ line, column, element: 'li' });
+  const listIsTight = (source: string) => {
+    const list = parse(source, 'md').children.find((node) => node.type === 'list');
+    return list?.type === 'list' && !list.spread && list.children.every((item) => !item.spread);
+  };
+
+  it('inserts below an item without loosening the list', () => {
+    const out = insertImage(tight, { target: at(3), position: 'after', ...img('/x.webp') }, 'md');
+    expect(out).toBe(`Intro.\n\n- one\n  ![New](/x.webp)\n- two\n  - nested\n- three\n`);
+    expect(listIsTight(out)).toBe(true);
+  });
+
+  it('inserts above an item without loosening the list', () => {
+    const out = insertImage(tight, { target: at(6), position: 'before', ...img('/x.webp') }, 'md');
+    expect(out).toBe(`Intro.\n\n- one\n- two\n  - nested\n- ![New](/x.webp)\n  three\n`);
+  });
+
+  it('puts the image under the text, above a nested list', () => {
+    const out = insertImage(tight, { target: at(4), position: 'after', ...img('/x.webp') }, 'md');
+    expect(out).toBe(`Intro.\n\n- one\n- two\n  ![New](/x.webp)\n  - nested\n- three\n`);
+  });
+
+  it('works in nested and indented lists inside components', () => {
+    const src = `<Callout>\n  1. first\n  2. second\n</Callout>\n`;
+    const out = insertImage(
+      src,
+      { target: { line: 2, column: 3, element: 'li' }, position: 'after', ...img('/x.webp') },
+      'mdx',
+    );
+    expect(out).toBe(`<Callout>\n  1. first\n     ![New](/x.webp)\n  2. second\n</Callout>\n`);
+  });
+
+  it('keeps blank-line blocks in lists that are already loose', () => {
+    const out = insertImage(loose, { target: at(1), position: 'after', ...img('/x.webp') }, 'md');
+    expect(out).toBe(`- one\n\n  ![New](/x.webp)\n\n- two\n`);
+  });
+
+  it('removing restores the original list exactly', () => {
+    const below = insertImage(tight, { target: at(3), position: 'after', ...img('/x.webp') }, 'md');
+    expect(removeImage(below, { target: at(3), url: '/x.webp' }, 'md')).toBe(tight);
+    const above = insertImage(
+      tight,
+      { target: at(6), position: 'before', ...img('/x.webp') },
+      'md',
+    );
+    expect(removeImage(above, { target: at(6), url: '/x.webp' }, 'md')).toBe(tight);
+    const nested = insertImage(
+      tight,
+      { target: at(4), position: 'after', ...img('/x.webp') },
+      'md',
+    );
+    expect(removeImage(nested, { target: at(4), url: '/x.webp' }, 'md')).toBe(tight);
   });
 });
 

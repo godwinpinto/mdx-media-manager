@@ -70,7 +70,10 @@ server never loads `vite.config.ts`.
 ## Using it
 
 - **Insert**: hover any block (paragraphs, headings, lists, code, tables, and content inside
-  components like `<Callout>` or `<Tab>`), then click **+ Image above/below**.
+  components like `<Callout>` or `<Tab>`), then click **+ Image above/below**. Hover a component's
+  own area (e.g. between steps of `<Steps>`) to insert before/after the whole component; this also
+  works for components that don't pass props to the page. In a tight list the image goes on its
+  own line inside the item, so the list keeps its compact spacing.
 - **Edit / Delete**: hover an image and use the toolbar in its top-right corner. Edit opens the
   current image: rename it, change its alt text, crop or convert it, or drop/paste a new one.
   Renaming or changing alt text alone doesn't re-encode the image.
