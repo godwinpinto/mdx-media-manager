@@ -1,0 +1,5 @@
+{
+  "singleQuote": true,
+  "printWidth": 100,
+  "ignorePatterns": ["**/dist", "**/.next", "**/.source", "pnpm-lock.yaml"]
+}

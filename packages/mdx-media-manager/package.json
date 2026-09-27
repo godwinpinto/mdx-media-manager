@@ -1,0 +1,59 @@
+{
+  "name": "mdx-media-manager",
+  "version": "0.0.0",
+  "description": "Add, replace and delete images in MDX docs straight from the rendered page, during development",
+  "keywords": [
+    "dev-tools",
+    "fumadocs",
+    "images",
+    "mdx",
+    "next"
+  ],
+  "license": "MIT",
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    "./next": "./dist/next.js",
+    "./loader": "./dist/loader.js",
+    "./client": "./dist/client.js",
+    "./server": "./dist/server.js",
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "clean": "rimraf dist",
+    "dev": "tsdown --watch --clean false",
+    "lint": "oxlint .",
+    "test": "vitest run",
+    "types:check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@mdx-media-manager/core": "workspace:*",
+    "@mdx-media-manager/ui": "workspace:*",
+    "acorn": "^8.18.0",
+    "magic-string": "^1.4.2"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.1",
+    "@types/react": "^19.3.0",
+    "next": "16.3.6",
+    "react": "^19.3.0",
+    "tsconfig": "workspace:*",
+    "tsdown": "0.23.0",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.2",
+    "@mdx-js/mdx": "^3.1.1"
+  },
+  "peerDependencies": {
+    "next": ">=15.3.0",
+    "react": "^19.0.0"
+  },
+  "peerDependenciesMeta": {
+    "next": {
+      "optional": true
+    }
+  }
+}
