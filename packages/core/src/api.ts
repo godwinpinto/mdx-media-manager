@@ -20,7 +20,7 @@ import { formatOf } from './mdx/parse';
 import { resolveOptions, type MediaManagerOptions, type ResolvedOptions } from './options';
 import { createRouter, HttpError, json } from './router';
 import { copyUnderName, removeIfOrphaned as removeIfOrphanedFile } from './images';
-import { createLibrary } from './library';
+import { createLibrary, defaultPageUrl } from './library';
 import { checkRequest } from './security';
 
 const target = z.object({
@@ -375,7 +375,7 @@ function createOperations(options: ResolvedOptions) {
 export function createMediaManager(input: MediaManagerOptions = {}) {
   const options = resolveOptions(input);
   const operations = createOperations(options);
-  const library = createLibrary(options, input.pageUrl);
+  const library = createLibrary(options, (file) => input.pageUrl?.(file) ?? defaultPageUrl(file));
 
   const handler = createRouter({
     basePath: options.basePath,

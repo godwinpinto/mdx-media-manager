@@ -119,7 +119,8 @@ Every local MDX collection works: `defineDocs` / `defineCollections` in the same
 changelog, …) are tagged, editable and part of the library.
 
 Content outside the app, such as a `shared/docs` package in a monorepo or Fumadocs `workspaces`, is
-editable too. `dir` values written as plain strings in `defineDocs`, `defineCollections` or
+editable too (see `apps/docs/next.config.mjs` in this repo, which also sets `pageUrl` for it). `dir`
+values written as plain strings in `defineDocs`, `defineCollections` or
 `defineConfig({ workspaces })` are detected automatically. Add others with `contentRoots`. Only
 `.md`/`.mdx` files in those folders can be edited, and their images go to
 `images/<folder name>/<page>`.
@@ -142,9 +143,13 @@ Pass them as the second argument of `withMdxMediaManager(config, options)` or to
   image: { format: 'webp', quality: 82, maxWidth: 1600 },
   maxUploadSize: 25 * 1024 * 1024,
   allowedHosts: [], // extra hostnames besides localhost, e.g. a LAN name
-  // Page URL for a content file (for the library's "open" links). The default follows Fumadocs:
-  // content/docs/a/index.mdx → /docs/a. For example, to drop the content folder name:
-  pageUrl: (file) => `/${file.replace(/^content\//, '').replace(/\.mdx?$/, '')}`,
+  // Page URL for a content file (path relative to the app), for the library's "open" links.
+  // Return undefined to keep the default, which follows Fumadocs: content/docs/a.mdx → /docs/a.
+  // Content outside the app needs this, e.g. a shared handbook served at /handbook:
+  pageUrl: (file) =>
+    file.startsWith('../../shared/handbook/')
+      ? `/handbook/${file.slice(22).replace(/\.mdx?$/, '').replace(/(^|\/)index$/, '')}`
+      : undefined,
 }
 ```
 

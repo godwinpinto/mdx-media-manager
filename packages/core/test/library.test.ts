@@ -94,6 +94,16 @@ describe('scan', () => {
     expect(result.pages.map((p: any) => p.pageUrl)).toEqual(['/docs/guide/b', '/docs']);
   });
 
+  it('uses a custom pageUrl, falling back to the default', async () => {
+    manager = createMediaManager({
+      root,
+      pageUrl: (file) =>
+        file.includes('/guide/') ? `/guides/${path.basename(file, '.mdx')}` : undefined,
+    });
+    const result = await scan();
+    expect(result.pages.map((p: any) => p.pageUrl)).toEqual(['/guides/b', '/docs']);
+  });
+
   it('maps content files to page URLs', () => {
     expect(defaultPageUrl('content/docs/index.mdx')).toBe('/docs');
     expect(defaultPageUrl('content/docs/a/index.md')).toBe('/docs/a');
