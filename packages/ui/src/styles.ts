@@ -53,12 +53,26 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .dialog header { display: flex; align-items: center; justify-content: space-between; }
 .dialog h2 { margin: 0; font-size: 16px; font-weight: 600; }
 .icon { border: 0; background: transparent; font-size: 20px; line-height: 1; padding: 4px 8px; border-radius: 6px; }
+.dialog { position: relative; outline: none; }
 .drop {
-  display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 48px 16px; border-radius: 10px;
+  display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 44px 16px; border-radius: 10px;
   border: 2px dashed var(--line); background: var(--field); color: var(--muted);
 }
 .drop strong { color: var(--fg); font-size: 14px; }
 .drop.active { border-color: var(--accent); }
+.drop-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+.drop-actions button {
+  height: 32px; padding: 0 14px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); font-weight: 500;
+}
+.drop-actions .primary { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
+.drop-overlay {
+  position: absolute; inset: 8px; display: grid; place-items: center; border-radius: 10px; pointer-events: none;
+  border: 2px dashed var(--accent); background: color-mix(in srgb, var(--bg) 85%, transparent);
+  color: var(--accent); font-weight: 600; font-size: 15px;
+}
+.hint { margin: 0; }
+.hint .link { display: inline; }
+.notice { margin: 0; color: var(--muted); }
 .crop-area { display: flex; justify-content: center; background: var(--field); border-radius: 8px; padding: 8px; }
 .crop-area img { max-height: 50vh; max-width: 100%; display: block; }
 .row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }

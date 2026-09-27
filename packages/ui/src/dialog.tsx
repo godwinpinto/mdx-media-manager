@@ -37,6 +37,31 @@ const ratios: { label: string; value?: number | 'original' }[] = [
 
 const fullCrop: PercentCrop = { unit: '%', x: 0, y: 0, width: 100, height: 100 };
 
+const isMac =
+  typeof navigator !== 'undefined' &&
+  /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
+const pasteKey = isMac ? '⌘V' : 'Ctrl+V';
+const canReadClipboard =
+  typeof navigator !== 'undefined' && typeof navigator.clipboard?.read === 'function';
+
+/** `team-photo_2024.png` → `team photo 2024`; generic names (clipboard, screenshots) give nothing */
+function altFromName(name: string): string {
+  const base = name.replace(/\.[^.]+$/, '');
+  if (/^(image|pasted-image|clipboard|screenshot|screen shot|img_?\d*)\b/i.test(base)) return '';
+  return base.replace(/[-_]+/g, ' ').trim();
+}
+
+/** The first image in a paste: screenshots and copied images arrive as files or file items. */
+function imageFromClipboard(data: DataTransfer | null): File | undefined {
+  if (!data) return;
+  const file = Array.from(data.files).find((f) => f.type.startsWith('image/'));
+  if (file) return file;
+  for (const item of Array.from(data.items)) {
+    if (item.kind === 'file' && item.type.startsWith('image/'))
+      return item.getAsFile() ?? undefined;
+  }
+}
+
 export function ImageDialog({
   mode,
   defaults,
@@ -52,11 +77,32 @@ export function ImageDialog({
   const [crop, setCrop] = useState<PercentCrop>(fullCrop);
   const [ratio, setRatio] = useState<number | 'original' | undefined>();
   const [alt, setAlt] = useState(initialAlt);
+  /** Alt text still derived from a file name (not typed), so a new file may replace it */
+  const altIsAuto = useRef(!initialAlt);
   const [format, setFormat] = useState(defaults.format);
   const [quality, setQuality] = useState(defaults.quality);
   const [maxWidth, setMaxWidth] = useState(defaults.maxWidth);
   const [dragging, setDragging] = useState(false);
+  const [notice, setNotice] = useState<string>();
   const input = useRef<HTMLInputElement>(null);
+  const dialog = useRef<HTMLFormElement>(null);
+  /** dragenter/dragleave fire for every child element; count them to know when the drag leaves */
+  const dragDepth = useRef(0);
+
+  // Move focus into the dialog so keyboard shortcuts (Esc, Tab) apply to it right away.
+  useEffect(() => dialog.current?.focus(), []);
+
+  // Paste works wherever focus is while the dialog is open (the page, the dialog, a field).
+  useEffect(() => {
+    const onPaste = (e: ClipboardEvent) => {
+      const image = imageFromClipboard(e.clipboardData);
+      if (!image) return; // plain text, e.g. into the alt text field
+      e.preventDefault();
+      choose(image);
+    };
+    window.addEventListener('paste', onPaste);
+    return () => window.removeEventListener('paste', onPaste);
+  });
 
   useEffect(() => {
     if (!file) return;
@@ -79,11 +125,16 @@ export function ImageDialog({
         : undefined;
 
   function choose(next: File | undefined) {
-    if (!next || !next.type.startsWith('image/')) return;
+    if (!next) return;
+    if (!next.type.startsWith('image/')) {
+      setNotice(`"${next.name}" is not an image.`);
+      return;
+    }
+    setNotice(undefined);
     setFile(next);
     setNatural(undefined);
     setCrop(fullCrop);
-    if (!alt) setAlt(next.name.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' '));
+    if (altIsAuto.current) setAlt(altFromName(next.name));
   }
 
   function applyRatio(value: number | 'original' | undefined) {
@@ -142,21 +193,59 @@ export function ImageDialog({
     });
   }
 
-  const onDrop = (e: DragEvent) => {
-    e.preventDefault();
-    setDragging(false);
-    choose(e.dataTransfer.files[0]);
+  async function pasteFromClipboard() {
+    try {
+      for (const item of await navigator.clipboard.read()) {
+        const type = item.types.find((t) => t.startsWith('image/'));
+        if (!type) continue;
+        const blob = await item.getType(type);
+        return choose(new File([blob], `pasted-image.${type.split('/')[1] ?? 'png'}`, { type }));
+      }
+      setNotice('The clipboard has no image. Copy an image or take a screenshot first.');
+    } catch {
+      setNotice(`Clipboard access was blocked. Press ${pasteKey} instead.`);
+    }
+  }
+
+  const hasFiles = (e: DragEvent) => e.dataTransfer.types.includes('Files');
+  const drag = {
+    onDragEnter(e: DragEvent) {
+      if (!hasFiles(e)) return;
+      e.preventDefault();
+      dragDepth.current++;
+      setDragging(true);
+    },
+    onDragOver(e: DragEvent) {
+      if (!hasFiles(e)) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'copy';
+    },
+    onDragLeave(e: DragEvent) {
+      if (!hasFiles(e)) return;
+      dragDepth.current = Math.max(0, dragDepth.current - 1);
+      if (dragDepth.current === 0) setDragging(false);
+    },
+    onDrop(e: DragEvent) {
+      if (!hasFiles(e)) return;
+      // Anywhere on the dialog or backdrop; never let the browser open the file instead.
+      e.preventDefault();
+      dragDepth.current = 0;
+      setDragging(false);
+      if (!busy) choose(e.dataTransfer.files[0]);
+    },
   };
 
   return (
     <div
       className="backdrop"
       onMouseDown={(e) => e.target === e.currentTarget && !busy && onCancel()}
+      {...drag}
     >
       <form
-        className="dialog"
+        ref={dialog}
+        tabIndex={-1}
+        className={`dialog ${dragging ? 'dragging' : ''}`}
         onSubmit={submit}
-        onPaste={(e) => choose(e.clipboardData.files[0])}
         role="dialog"
         aria-modal="true"
         aria-label={mode === 'insert' ? 'Insert image' : 'Replace image'}
@@ -175,20 +264,19 @@ export function ImageDialog({
         </header>
 
         {!file ? (
-          <button
-            type="button"
-            className={`drop ${dragging ? 'active' : ''}`}
-            onClick={() => input.current?.click()}
-            onDragOver={(e) => {
-              e.preventDefault();
-              setDragging(true);
-            }}
-            onDragLeave={() => setDragging(false)}
-            onDrop={onDrop}
-          >
-            <strong>Choose an image</strong>
-            <span>or drop / paste it here</span>
-          </button>
+          <div className={`drop ${dragging ? 'active' : ''}`}>
+            <strong>Drop, paste ({pasteKey}) or choose an image</strong>
+            <div className="drop-actions">
+              <button type="button" className="primary" onClick={() => input.current?.click()}>
+                Choose file
+              </button>
+              {canReadClipboard && (
+                <button type="button" onClick={pasteFromClipboard}>
+                  Paste from clipboard
+                </button>
+              )}
+            </div>
+          </div>
         ) : (
           <>
             <div className="crop-area">
@@ -302,15 +390,22 @@ export function ImageDialog({
               <span className="label">Alt text{mode === 'insert' && <em> (required)</em>}</span>
               <input
                 value={alt}
-                onChange={(e) => setAlt(e.currentTarget.value)}
+                onChange={(e) => {
+                  altIsAuto.current = e.currentTarget.value === '';
+                  setAlt(e.currentTarget.value);
+                }}
                 placeholder="Describe the image"
                 maxLength={500}
               />
             </label>
 
-            <button type="button" className="link" onClick={() => input.current?.click()}>
-              Choose a different file
-            </button>
+            <p className="muted hint">
+              To use a different image, drop or paste it ({pasteKey}), or{' '}
+              <button type="button" className="link" onClick={() => input.current?.click()}>
+                choose a file
+              </button>
+              .
+            </p>
           </>
         )}
 
@@ -322,6 +417,13 @@ export function ImageDialog({
           onChange={(e) => choose(e.currentTarget.files?.[0])}
         />
 
+        {dragging && (
+          <div className="drop-overlay" aria-hidden="true">
+            Drop to use this image
+          </div>
+        )}
+
+        {notice && <p className="notice">{notice}</p>}
         {error && <p className="error">{error}</p>}
 
         <footer>
