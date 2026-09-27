@@ -122,7 +122,7 @@ Every local MDX collection works: `defineDocs` / `defineCollections` in the same
 changelog, …) are tagged, editable and part of the library.
 
 Content outside the app, such as a `shared/docs` package in a monorepo or Fumadocs `workspaces`, is
-editable too (see `apps/docs/next.config.mjs` in this repo, which also sets `pageUrl` for it). `dir`
+editable too (see `apps/next/next.config.mjs` in this repo, which also sets `pageUrl` for it). `dir`
 values written as plain strings in `defineDocs`, `defineCollections` or
 `defineConfig({ workspaces })` are detected automatically. Add others with `contentRoots`. Only
 `.md`/`.mdx` files in those folders can be edited, and their images go to
