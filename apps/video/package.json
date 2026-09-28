@@ -1,0 +1,15 @@
+{
+  "name": "video",
+  "version": "0.0.0",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "record": "node src/record.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.1",
+    "playwright": "1.63.0",
+    "sharp": "0.35.5"
+  }
+}

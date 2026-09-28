@@ -1,0 +1,677 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>stage</title>
+    <style>
+      :root {
+        --bg: #fafafa;
+        --fg: #18181b;
+        --muted: #71717a;
+        --line: #e4e4e7;
+        --card: #ffffff;
+        --accent: #4f46e5;
+        --accent-2: #4f46e5;
+        --ok: #059669;
+        --warn: #b45309;
+        --sans: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Inter', system-ui, sans-serif;
+        --mono: 'SF Mono', ui-monospace, Menlo, monospace;
+      }
+      * {
+        box-sizing: border-box;
+        margin: 0;
+      }
+      /* Laid out at 1280×720 and zoomed to the 1920×1080 viewport (the framed site too) */
+      html {
+        zoom: 1.5;
+      }
+      html,
+      body {
+        width: 1280px;
+        height: 720px;
+        overflow: hidden;
+      }
+      body {
+        background: var(--bg);
+        color: var(--fg);
+        font-family: var(--sans);
+        -webkit-font-smoothing: antialiased;
+      }
+
+      /* Scenes fade and lift in; only one is visible at a time */
+      .scene {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        opacity: 0;
+        transform: translateY(14px) scale(0.985);
+        transition:
+          opacity 420ms ease,
+          transform 520ms cubic-bezier(0.2, 0.8, 0.2, 1);
+        pointer-events: none;
+      }
+      .scene.on {
+        opacity: 1;
+        transform: none;
+        pointer-events: auto;
+      }
+      .scene.out {
+        opacity: 0;
+        transform: translateY(-10px) scale(1.01);
+      }
+
+      h1 {
+        font-size: 52px;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+        line-height: 1.1;
+        text-align: center;
+      }
+      h1 em {
+        font-style: normal;
+        color: var(--accent);
+      }
+      .sub code {
+        font-size: 0.9em;
+        color: var(--fg);
+        background: #f4f4f5;
+        border: 1px solid var(--line);
+        padding: 1px 6px;
+        border-radius: 6px;
+      }
+      .sub {
+        margin-top: 14px;
+        font-size: 21px;
+        color: var(--muted);
+        text-align: center;
+      }
+      code,
+      .mono {
+        font-family: var(--mono);
+      }
+
+      .card {
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        box-shadow:
+          0 24px 60px -28px rgba(24, 24, 27, 0.22),
+          0 1px 2px rgba(24, 24, 27, 0.04);
+      }
+
+      /* Hook: a prompt and the MDX it produces */
+      #hook .row {
+        display: flex;
+        gap: 22px;
+        align-items: flex-start;
+        margin-top: 36px;
+      }
+      .prompt {
+        width: 440px;
+        padding: 22px 24px;
+      }
+      .prompt .who {
+        font-size: 13px;
+        color: var(--muted);
+        margin-bottom: 10px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .prompt .who i {
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        background: var(--accent);
+        display: inline-block;
+      }
+      .prompt .text {
+        font-size: 23px;
+        line-height: 1.45;
+        min-height: 56px;
+      }
+      .caret {
+        display: inline-block;
+        width: 2px;
+        height: 1.1em;
+        background: var(--fg);
+        vertical-align: -3px;
+        margin-left: 2px;
+        animation: blink 1s steps(1) infinite;
+      }
+      @keyframes blink {
+        50% {
+          opacity: 0;
+        }
+      }
+      .editor {
+        width: 660px;
+        height: 420px;
+        overflow: hidden;
+      }
+      .editor .tab {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        padding: 10px 14px;
+        border-bottom: 1px solid var(--line);
+        font-size: 13px;
+        color: var(--muted);
+      }
+      .editor .tab b {
+        color: var(--fg);
+        font-weight: 500;
+      }
+      .editor pre {
+        padding: 14px 16px;
+        font-family: var(--mono);
+        font-size: 15.5px;
+        line-height: 1.6;
+        color: #3f3f46;
+        white-space: pre-wrap;
+      }
+      .editor pre .k {
+        color: #7c3aed;
+      }
+      .editor pre .h {
+        color: #0369a1;
+        font-weight: 600;
+      }
+      .editor pre .d {
+        color: var(--muted);
+      }
+
+      /* Problem: the manual routine */
+      #problem ol {
+        list-style: none;
+        padding: 0;
+        margin-top: 34px;
+        width: 760px;
+        display: grid;
+        gap: 12px;
+      }
+      #problem li {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        padding: 14px 22px;
+        font-size: 22px;
+        opacity: 0;
+        transform: translateX(-12px);
+        transition:
+          opacity 260ms ease,
+          transform 260ms ease;
+      }
+      #problem li.on {
+        opacity: 1;
+        transform: none;
+      }
+      #problem li .n {
+        width: 26px;
+        height: 26px;
+        border-radius: 50%;
+        border: 1px solid var(--line);
+        color: var(--muted);
+        display: grid;
+        place-items: center;
+        font-size: 13px;
+        flex: none;
+      }
+      #problem li code {
+        font-size: 18px;
+        color: #b91c1c;
+        background: #fef2f2;
+        padding: 2px 6px;
+        border-radius: 6px;
+      }
+
+      /* Reveal and outro wordmark */
+      .mark {
+        font-family: var(--mono);
+        font-size: 54px;
+        font-weight: 600;
+        letter-spacing: -0.03em;
+      }
+      .mark span {
+        color: var(--accent);
+      }
+      .pill {
+        margin-top: 30px;
+        font-family: var(--mono);
+        font-size: 20px;
+        padding: 14px 22px;
+      }
+      .pill .d {
+        color: var(--muted);
+      }
+      .url {
+        margin-top: 22px;
+        font-size: 18px;
+        color: var(--muted);
+      }
+
+      /* Demo: captions over a browser window */
+      #demo {
+        justify-content: flex-start;
+        padding-top: 22px;
+      }
+      #caption {
+        height: 58px;
+        display: grid;
+        place-items: center;
+      }
+      #caption div {
+        grid-area: 1 / 1;
+        font-size: 28px;
+        font-weight: 650;
+        letter-spacing: -0.015em;
+        text-align: center;
+        opacity: 0;
+        transform: translateY(8px);
+        transition:
+          opacity 300ms ease,
+          transform 300ms ease;
+      }
+      #caption div.on {
+        opacity: 1;
+        transform: none;
+      }
+      #caption div em {
+        font-style: normal;
+        color: var(--accent);
+      }
+      .window {
+        width: 1180px;
+        height: 620px;
+        margin-top: 8px;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+      }
+      .chrome {
+        height: 38px;
+        flex: none;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 0 14px;
+        border-bottom: 1px solid var(--line);
+      }
+      .chrome i {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        background: #d4d4d8;
+      }
+      .chrome i:nth-child(1) {
+        background: #f87171;
+      }
+      .chrome i:nth-child(2) {
+        background: #fbbf24;
+      }
+      .chrome i:nth-child(3) {
+        background: #34d399;
+      }
+      .chrome .address {
+        margin-left: 14px;
+        flex: 1;
+        max-width: 460px;
+        height: 24px;
+        border-radius: 7px;
+        background: #f4f4f5;
+        color: var(--muted);
+        font-size: 12.5px;
+        display: flex;
+        align-items: center;
+        padding: 0 12px;
+      }
+      .chrome .badge {
+        margin-left: auto;
+        font-size: 12px;
+        color: var(--ok);
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .chrome .badge::before {
+        content: '';
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--ok);
+      }
+      iframe {
+        flex: 1;
+        width: 100%;
+        border: 0;
+        background: #ffffff;
+      }
+
+      /* Development only */
+      .modes {
+        display: flex;
+        gap: 22px;
+        margin-top: 36px;
+      }
+      .mode {
+        width: 380px;
+        padding: 24px 26px;
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+        font-size: 20px;
+      }
+      .mode .cmd {
+        color: var(--muted);
+      }
+      .mode code {
+        color: var(--fg);
+        font-size: 19px;
+      }
+      .mode b {
+        font-weight: 600;
+        font-size: 22px;
+        color: var(--muted);
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .mode b::before {
+        content: '';
+        width: 11px;
+        height: 11px;
+        border-radius: 50%;
+        background: #d4d4d8;
+      }
+      .mode b.on {
+        color: var(--fg);
+      }
+      .mode b.on::before {
+        background: var(--ok);
+      }
+
+      /* Git */
+      .terminal {
+        width: 960px;
+        margin-top: 34px;
+      }
+      .terminal .tab {
+        padding: 10px 14px;
+        border-bottom: 1px solid var(--line);
+        font-size: 13px;
+        color: var(--muted);
+        display: flex;
+        gap: 8px;
+        align-items: center;
+      }
+      .terminal .tab i {
+        width: 11px;
+        height: 11px;
+        border-radius: 50%;
+        background: #d4d4d8;
+      }
+      .terminal pre {
+        padding: 16px 18px;
+        font-family: var(--mono);
+        font-size: 17px;
+        line-height: 1.65;
+        color: #3f3f46;
+        white-space: pre-wrap;
+        word-break: break-all;
+      }
+      .terminal .p {
+        color: var(--accent);
+      }
+      .terminal .add {
+        color: var(--ok);
+      }
+      .terminal .new {
+        color: var(--warn);
+      }
+      .terminal .d {
+        color: var(--muted);
+      }
+
+      /* Keystroke chip and cursor */
+      #keys {
+        position: absolute;
+        left: 50%;
+        bottom: 36px;
+        transform: translate(-50%, 12px);
+        opacity: 0;
+        font-family: var(--sans);
+        font-size: 22px;
+        font-weight: 600;
+        padding: 10px 18px;
+        border-radius: 12px;
+        background: #ffffff;
+        border: 1px solid #d4d4d8;
+        box-shadow: 0 10px 30px rgba(24, 24, 27, 0.15);
+        transition:
+          opacity 180ms ease,
+          transform 180ms ease;
+        z-index: 10;
+      }
+      #keys.on {
+        opacity: 1;
+        transform: translate(-50%, 0);
+      }
+      #cursor {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 26px;
+        height: 26px;
+        z-index: 20;
+        pointer-events: none;
+        transform: translate(-100px, -100px);
+        filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.3));
+      }
+      #cursor.hide {
+        opacity: 0;
+      }
+      .ripple {
+        position: absolute;
+        z-index: 19;
+        width: 36px;
+        height: 36px;
+        margin: -18px 0 0 -18px;
+        border-radius: 50%;
+        border: 2px solid var(--accent);
+        pointer-events: none;
+        animation: ripple 450ms ease-out forwards;
+      }
+      @keyframes ripple {
+        from {
+          transform: scale(0.3);
+          opacity: 1;
+        }
+        to {
+          transform: scale(1.4);
+          opacity: 0;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <section class="scene" id="hook">
+      <h1>AI writes your docs <em>in seconds.</em></h1>
+      <div class="row">
+        <div class="card prompt">
+          <div class="who"><i></i>Prompt</div>
+          <div class="text"><span id="prompt-text"></span><span class="caret"></span></div>
+        </div>
+        <div class="card editor">
+          <div class="tab"><b>installation.mdx</b> content/docs</div>
+          <pre id="mdx"></pre>
+        </div>
+      </div>
+    </section>
+
+    <section class="scene" id="problem">
+      <h1>The images? <em>Still by hand.</em></h1>
+      <ol>
+        <li class="card"><span class="n">1</span>Take a screenshot</li>
+        <li class="card"><span class="n">2</span>Crop it in another app</li>
+        <li class="card">
+          <span class="n">3</span>Rename <code>Screenshot 2026-09-27 at 10.42.17.png</code>
+        </li>
+        <li class="card"><span class="n">4</span>Move it into <code>public/images/docs/…</code></li>
+        <li class="card">
+          <span class="n">5</span>Type <code>![…](/images/docs/…)</code> and refresh
+        </li>
+      </ol>
+    </section>
+
+    <section class="scene" id="reveal">
+      <div class="mark">mdx<span>-</span>media<span>-</span>manager</div>
+      <p class="sub">Add, replace and delete images right on the page.</p>
+    </section>
+
+    <section class="scene" id="demo">
+      <div id="caption"></div>
+      <div class="card window">
+        <div class="chrome">
+          <i></i><i></i><i></i><span class="address" id="address">localhost:3002/docs</span
+          ><span class="badge">next dev</span>
+        </div>
+        <iframe id="site" title="site"></iframe>
+      </div>
+    </section>
+
+    <section class="scene" id="git">
+      <h1>Your media stays in <em>git</em> or <em>S3</em>.</h1>
+      <div class="card terminal">
+        <div class="tab"><i></i><i></i><i></i>&nbsp;terminal</div>
+        <pre id="git-out"></pre>
+      </div>
+      <p class="sub">
+        No database. Set <code>MDX_MEDIA_S3_BUCKET</code> and images go to S3, served from your CDN.
+      </p>
+    </section>
+
+    <section class="scene" id="dev">
+      <h1>Only in <em>development</em>.</h1>
+      <div class="modes">
+        <div class="card mode">
+          <span class="cmd"><code>next dev</code> · <code>vite dev</code></span
+          ><b class="on">Image manager on</b>
+        </div>
+        <div class="card mode">
+          <span class="cmd"><code>next build</code> · <code>vite build</code></span
+          ><b>Not included</b>
+        </div>
+      </div>
+      <p class="sub">Nothing ships to production: no routes, no components, no runtime code.</p>
+    </section>
+
+    <section class="scene" id="outro">
+      <div class="mark">mdx<span>-</span>media<span>-</span>manager</div>
+      <div class="card pill"><span class="d">$</span> npx mdx-media-manager init</div>
+      <p class="sub">One command to set up, for Next.js and TanStack Start.</p>
+      <p class="url">github.com/godwinpinto/mdx-media-manager</p>
+    </section>
+
+    <div id="keys"></div>
+    <svg id="cursor" class="hide" viewBox="0 0 26 26">
+      <path
+        d="M3 2 L3 21 L8.2 16.4 L11.6 24 L15 22.5 L11.7 15 L18.5 15 Z"
+        fill="#111"
+        stroke="#fff"
+        stroke-width="1.4"
+        stroke-linejoin="round"
+      />
+    </svg>
+
+    <script>
+      const $ = (s) => document.querySelector(s);
+      const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+      /** Pointer coordinates arrive in viewport pixels; layout is in zoomed CSS pixels */
+      const Z = 1.5;
+      const escape = (s) =>
+        s.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]);
+
+      window.stage = {
+        scene(id) {
+          for (const s of document.querySelectorAll('.scene')) {
+            if (s.id === id) {
+              s.classList.remove('out');
+              s.classList.add('on');
+            } else if (s.classList.contains('on')) {
+              s.classList.remove('on');
+              s.classList.add('out');
+            }
+          }
+        },
+        async type(text, ms = 38) {
+          const el = $('#prompt-text');
+          for (const ch of text) {
+            el.textContent += ch;
+            await sleep(ms);
+          }
+        },
+        /** Stream MDX lines into the editor, lightly highlighted */
+        async stream(lines, ms = 55) {
+          const el = $('#mdx');
+          for (const line of lines) {
+            let html = escape(line);
+            if (/^#+ /.test(line)) html = `<span class="h">${html}</span>`;
+            else if (/^(---|title:|description:)/.test(line))
+              html = `<span class="d">${html}</span>`;
+            else html = html.replace(/(&lt;\/?[A-Z]\w*&gt;)/g, '<span class="k">$1</span>');
+            el.innerHTML += html + '\n';
+            await sleep(ms);
+          }
+        },
+        async steps(ms) {
+          for (const li of document.querySelectorAll('#problem li')) {
+            li.classList.add('on');
+            await sleep(ms);
+          }
+        },
+        caption(html) {
+          const box = $('#caption');
+          for (const old of box.children) {
+            old.classList.remove('on');
+            setTimeout(() => old.remove(), 320);
+          }
+          if (!html) return;
+          const el = document.createElement('div');
+          el.innerHTML = html;
+          box.append(el);
+          requestAnimationFrame(() => requestAnimationFrame(() => el.classList.add('on')));
+        },
+        keys(text) {
+          const el = $('#keys');
+          if (text) el.textContent = text;
+          el.classList.toggle('on', !!text);
+        },
+        git(html) {
+          $('#git-out').innerHTML = html;
+        },
+        address(text) {
+          $('#address').textContent = text;
+        },
+        cursor(x, y) {
+          const c = $('#cursor');
+          c.classList.remove('hide');
+          c.style.transform = `translate(${x / Z - 3}px, ${y / Z - 2}px)`;
+        },
+        hideCursor() {
+          $('#cursor').classList.add('hide');
+        },
+        click(x, y) {
+          const r = document.createElement('div');
+          r.className = 'ripple';
+          r.style.left = x / Z + 'px';
+          r.style.top = y / Z + 'px';
+          document.body.append(r);
+          setTimeout(() => r.remove(), 500);
+        },
+      };
+    </script>
+  </body>
+</html>
