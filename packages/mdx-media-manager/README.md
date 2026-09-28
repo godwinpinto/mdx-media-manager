@@ -134,8 +134,14 @@ haven't been tested.
 
 ## Storing images in S3 (optional)
 
-Set these (e.g. in `.env.local`) and new or replaced images are uploaded to the bucket instead of
-`public/`, and referenced by their CDN URL:
+Install the AWS SDK (only S3 users need it, so it isn't installed by default):
+
+```bash
+npm install -D @aws-sdk/client-s3
+```
+
+Then set these (e.g. in `.env.local`) and new or replaced images are uploaded to the bucket
+instead of `public/`, and referenced by their CDN URL:
 
 ```bash
 MDX_MEDIA_S3_BUCKET=my-docs-images

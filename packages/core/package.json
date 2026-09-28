@@ -1,22 +1,9 @@
 {
   "name": "@mdx-media-manager/core",
   "version": "0.0.0",
-  "description": "Framework-agnostic server for mdx-media-manager: MDX source editing, image processing and the API handler",
-  "homepage": "https://github.com/godwinpinto/mdx-media-manager#readme",
-  "bugs": {
-    "url": "https://github.com/godwinpinto/mdx-media-manager/issues"
-  },
+  "private": true,
+  "description": "Internal: server side of mdx-media-manager (MDX editing, image processing, API). Bundled into mdx-media-manager, not published.",
   "license": "MIT",
-  "author": "Godwin Pinto",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/godwinpinto/mdx-media-manager.git",
-    "directory": "packages/core"
-  },
-  "files": [
-    "dist",
-    "LICENSE"
-  ],
   "type": "module",
   "sideEffects": false,
   "exports": {
@@ -35,7 +22,6 @@
     "types:check": "tsc --noEmit"
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.1141.0",
     "magic-string": "^1.4.2",
     "remark-frontmatter": "^5.0.0",
     "remark-gfm": "^4.0.1",
@@ -43,10 +29,10 @@
     "remark-parse": "^11.0.0",
     "sharp": "^0.35.5",
     "unified": "^11.0.5",
-    "unist-util-visit": "^5.1.0",
     "zod": "4.6.5"
   },
   "devDependencies": {
+    "@aws-sdk/client-s3": "^3.1141.0",
     "@types/mdast": "^4.0.4",
     "@types/node": "^26.6.1",
     "aws-sdk-client-mock": "^4.1.0",
@@ -55,5 +41,13 @@
     "tsdown": "0.23.0",
     "typescript": "^7.0.2",
     "vitest": "^5.0.2"
+  },
+  "peerDependencies": {
+    "@aws-sdk/client-s3": "^3.1141.0"
+  },
+  "peerDependenciesMeta": {
+    "@aws-sdk/client-s3": {
+      "optional": true
+    }
   }
 }

@@ -3,16 +3,21 @@
 Add, edit and delete images in your MDX docs from the rendered page, during development.
 Repository: https://github.com/godwinpinto/mdx-media-manager
 
-| Path                         | Package                   | What                                                                                         |
-| ---------------------------- | ------------------------- | -------------------------------------------------------------------------------------------- |
-| `packages/mdx-media-manager` | `mdx-media-manager`       | Public entry: Next.js and Vite integrations, MDX loader, `init` CLI, client + server exports |
-| `packages/core`              | `@mdx-media-manager/core` | Framework-agnostic API, MDX source editing, image processing, library, S3 storage            |
-| `packages/ui`                | `@mdx-media-manager/ui`   | In-page overlay and library (React, shadow DOM)                                              |
-| `packages/tsconfig`          | —                         | Shared TypeScript configs                                                                    |
-| `apps/docs`                  | `docs`                    | The documentation site (Next.js + Fumadocs), port 3002                                       |
-| `apps/next`                  | `next-app`                | Next.js + Fumadocs example: docs, blog and handbook collections, port 3000                   |
-| `apps/tanstack-start`        | `tanstack-start-app`      | TanStack Start + Fumadocs example: docs and blog, port 3001                                  |
-| `shared/handbook`            | —                         | Content outside the apps (monorepo case), rendered by `apps/next` at `/handbook`             |
+One package is published to npm: `mdx-media-manager`. The other packages are internal and are
+bundled into it when it builds.
+
+| Path                         | Package                   | What                                                                                            |
+| ---------------------------- | ------------------------- | ----------------------------------------------------------------------------------------------- |
+| `packages/mdx-media-manager` | `mdx-media-manager`       | **Published.** Next.js and Vite integrations, MDX loader, `init` CLI, client and server exports |
+| `packages/core`              | `@mdx-media-manager/core` | Internal: API, MDX source editing, image processing, library, S3 storage                        |
+| `packages/ui`                | `@mdx-media-manager/ui`   | Internal: in-page overlay and library (React, shadow DOM)                                       |
+| `packages/tsconfig`          | —                         | Shared TypeScript configs                                                                       |
+| `apps/docs`                  | `docs`                    | The documentation site (Next.js + Fumadocs), port 3002                                          |
+| `apps/next`                  | `next-app`                | Next.js + Fumadocs example: docs, blog and handbook collections, port 3000                      |
+| `apps/tanstack-start`        | `tanstack-start-app`      | TanStack Start + Fumadocs example: docs and blog, port 3001                                     |
+| `apps/video`                 | `video`                   | Records the short teaser from the real overlay                                                  |
+| `apps/motion-graphics`       | `motion-graphics`         | The motion graphics promo film                                                                  |
+| `shared/handbook`            | —                         | Content outside the apps (monorepo case), rendered by `apps/next` at `/handbook`                |
 
 ```bash
 pnpm install

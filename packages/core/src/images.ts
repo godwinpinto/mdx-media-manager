@@ -32,6 +32,8 @@ export interface StoredImage {
  */
 export function createImageStorage(options: ResolvedOptions) {
   const s3: S3Store | undefined = options.s3 ? createS3Store(options.s3) : undefined;
+  // Say so at startup if S3 is configured but the SDK isn't installed, not on the first upload
+  s3?.connect().catch((error: Error) => console.error(error.message));
 
   /** Page image folder, relative to the images folder: `docs/guide` */
   const folderOf = (sourceFile: string) =>

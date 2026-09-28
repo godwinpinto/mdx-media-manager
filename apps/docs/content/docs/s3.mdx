@@ -14,7 +14,16 @@ Without these variables nothing changes.
 
 ## Set up
 
-Add the variables to `.env.local` (or your shell) and restart the dev server:
+Install the AWS SDK. It's only needed for S3, so it isn't installed with mdx-media-manager
+(works for R2 and MinIO too):
+
+```bash
+npm install -D @aws-sdk/client-s3
+```
+
+If the variables are set without it, the dev server says so when it starts.
+
+Then add the variables to `.env.local` (or your shell) and restart the dev server:
 
 <Tabs items={['AWS S3', 'Cloudflare R2', 'MinIO']}>
 <Tab value="AWS S3">

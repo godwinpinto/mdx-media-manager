@@ -118,6 +118,9 @@ importers:
       playwright:
         specifier: 1.63.0
         version: 1.63.0
+      sharp:
+        specifier: 0.35.5
+        version: 0.35.5(@types/node@26.6.3)
       typescript:
         specifier: ^7.0.2
         version: 7.0.2
@@ -264,9 +267,6 @@ importers:
 
   packages/core:
     dependencies:
-      '@aws-sdk/client-s3':
-        specifier: ^3.1141.0
-        version: 3.1141.0
       magic-string:
         specifier: ^1.4.2
         version: 1.4.2
@@ -288,13 +288,13 @@ importers:
       unified:
         specifier: ^11.0.5
         version: 11.0.5
-      unist-util-visit:
-        specifier: ^5.1.0
-        version: 5.1.0
       zod:
         specifier: 4.6.5
         version: 4.6.5
     devDependencies:
+      '@aws-sdk/client-s3':
+        specifier: ^3.1141.0
+        version: 3.1141.0
       '@types/mdast':
         specifier: ^4.0.4
         version: 4.0.4
@@ -322,12 +322,6 @@ importers:
 
   packages/mdx-media-manager:
     dependencies:
-      '@mdx-media-manager/core':
-        specifier: workspace:*
-        version: link:../core
-      '@mdx-media-manager/ui':
-        specifier: workspace:*
-        version: link:../ui
       acorn:
         specifier: ^8.18.0
         version: 8.18.0
@@ -337,10 +331,43 @@ importers:
       oxc-parser:
         specifier: ^0.151.0
         version: 0.151.0
+      react-image-crop:
+        specifier: ^11.1.2
+        version: 11.1.2(react@19.3.0)
+      remark-frontmatter:
+        specifier: ^5.0.0
+        version: 5.0.0(supports-color@7.2.0)
+      remark-gfm:
+        specifier: ^4.0.1
+        version: 4.0.1(supports-color@7.2.0)
+      remark-mdx:
+        specifier: ^3.1.1
+        version: 3.1.1(supports-color@7.2.0)
+      remark-parse:
+        specifier: ^11.0.0
+        version: 11.0.0(supports-color@7.2.0)
+      sharp:
+        specifier: ^0.35.5
+        version: 0.35.5(@types/node@26.6.3)
+      unified:
+        specifier: ^11.0.5
+        version: 11.0.5
+      zod:
+        specifier: 4.6.5
+        version: 4.6.5
     devDependencies:
+      '@aws-sdk/client-s3':
+        specifier: ^3.1141.0
+        version: 3.1141.0
       '@mdx-js/mdx':
         specifier: ^3.1.1
         version: 3.1.1(supports-color@7.2.0)
+      '@mdx-media-manager/core':
+        specifier: workspace:*
+        version: link:../core
+      '@mdx-media-manager/ui':
+        specifier: workspace:*
+        version: link:../ui
       '@types/node':
         specifier: ^26.6.1
         version: 26.6.3
@@ -353,6 +380,9 @@ importers:
       react:
         specifier: ^19.3.0
         version: 19.3.0
+      react-dom:
+        specifier: ^19.3.0
+        version: 19.3.0(react@19.3.0)
       tsconfig:
         specifier: workspace:*
         version: link:../tsconfig

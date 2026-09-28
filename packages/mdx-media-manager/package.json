@@ -1,6 +1,6 @@
 {
   "name": "mdx-media-manager",
-  "version": "0.0.0",
+  "version": "0.1.0-beta.0",
   "description": "Add, replace and delete images in MDX docs straight from the rendered page, during development",
   "keywords": [
     "dev-tools",
@@ -49,18 +49,28 @@
     "types:check": "tsc --noEmit"
   },
   "dependencies": {
-    "@mdx-media-manager/core": "workspace:*",
-    "@mdx-media-manager/ui": "workspace:*",
     "acorn": "^8.18.0",
     "magic-string": "^1.4.2",
-    "oxc-parser": "^0.151.0"
+    "oxc-parser": "^0.151.0",
+    "react-image-crop": "^11.1.2",
+    "remark-frontmatter": "^5.0.0",
+    "remark-gfm": "^4.0.1",
+    "remark-mdx": "^3.1.1",
+    "remark-parse": "^11.0.0",
+    "sharp": "^0.35.5",
+    "unified": "^11.0.5",
+    "zod": "4.6.5"
   },
   "devDependencies": {
+    "@aws-sdk/client-s3": "^3.1141.0",
     "@mdx-js/mdx": "^3.1.1",
+    "@mdx-media-manager/core": "workspace:*",
+    "@mdx-media-manager/ui": "workspace:*",
     "@types/node": "^26.6.1",
     "@types/react": "^19.3.0",
     "next": "16.3.6",
     "react": "^19.3.0",
+    "react-dom": "^19.3.0",
     "tsconfig": "workspace:*",
     "tsdown": "0.23.0",
     "typescript": "^7.0.2",
@@ -68,16 +78,24 @@
     "vitest": "^5.0.2"
   },
   "peerDependencies": {
+    "@aws-sdk/client-s3": "^3.1141.0",
     "next": ">=15.3.0",
     "react": "^19.0.0",
+    "react-dom": "^19.0.0",
     "vite": ">=6.0.0"
   },
   "peerDependenciesMeta": {
+    "@aws-sdk/client-s3": {
+      "optional": true
+    },
     "next": {
       "optional": true
     },
     "vite": {
       "optional": true
     }
+  },
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
   }
 }

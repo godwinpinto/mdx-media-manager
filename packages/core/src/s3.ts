@@ -74,11 +74,29 @@ export interface ObjectInfo {
 }
 
 /** The bucket, addressed by keys; URLs are `<cdnUrl>/<key>`. */
-export function createS3Store(options: ResolvedS3Options) {
-  let client: Promise<{ s3: S3Client; sdk: typeof import('@aws-sdk/client-s3') }> | undefined;
+/** The AWS SDK is an optional peer dependency: only S3 users install it. */
+export const MISSING_SDK =
+  '[mdx-media-manager] S3 storage needs the AWS SDK. Install it next to mdx-media-manager: npm install -D @aws-sdk/client-s3';
+
+type Sdk = typeof import('@aws-sdk/client-s3');
+
+export function createS3Store(
+  options: ResolvedS3Options,
+  /** How the SDK is loaded (tests replace it) */
+  importSdk: () => Promise<Sdk> = () => import('@aws-sdk/client-s3'),
+) {
+  let client: Promise<{ s3: S3Client; sdk: Sdk }> | undefined;
+
+  const loadSdk = () =>
+    importSdk().catch((error: { code?: string }) => {
+      // Forget the failure, so installing the SDK works without restarting the dev server
+      client = undefined;
+      if (error?.code === 'ERR_MODULE_NOT_FOUND') throw new Error(MISSING_SDK, { cause: error });
+      throw error;
+    });
 
   function connect() {
-    client ??= import('@aws-sdk/client-s3').then((sdk) => ({
+    client ??= loadSdk().then((sdk) => ({
       sdk,
       s3: new sdk.S3Client({
         region: options.region,
@@ -107,6 +125,8 @@ export function createS3Store(options: ResolvedS3Options) {
 
   return {
     options,
+    /** Load the SDK and create the client now (to report a missing SDK at startup) */
+    connect: () => connect().then(() => undefined),
 
     urlOf(key: string): string {
       return `${options.cdnUrl}/${key.split('/').map(encodeURIComponent).join('/')}`;

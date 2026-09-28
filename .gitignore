@@ -22,6 +22,7 @@ coverage
 .tanstack
 .cache
 
-# logs and keys
+# logs and keys (.npmrc can hold an npm token)
 *.log
 *.pem
+.npmrc

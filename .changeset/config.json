@@ -2,8 +2,12 @@
   "$schema": "https://unpkg.com/@changesets/config@3.1.1/schema.json",
   "changelog": "@changesets/cli/changelog",
   "commit": false,
-  "fixed": [["mdx-media-manager", "@mdx-media-manager/*"]],
+  "fixed": [],
   "access": "public",
   "baseBranch": "main",
-  "ignore": ["docs", "next-app", "tanstack-start-app", "video", "motion-graphics"]
+  "ignore": ["docs", "next-app", "tanstack-start-app", "video", "motion-graphics"],
+  "privatePackages": {
+    "version": false,
+    "tag": false
+  }
 }
