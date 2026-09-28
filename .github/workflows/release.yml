@@ -1,0 +1,37 @@
+name: Release
+
+# Opens a "Version packages" PR from pending changesets; merging it publishes to npm with
+# trusted publishing (OIDC, no tokens) and provenance. See RELEASING.md for the one-time setup.
+
+on:
+  push:
+    branches: [main]
+
+concurrency: ${{ github.workflow }}-${{ github.ref }}
+
+permissions:
+  contents: write # tags and GitHub releases
+  pull-requests: write # the "Version packages" PR
+  id-token: write # npm trusted publishing
+
+jobs:
+  release:
+    # Off until the one-time setup is done: set the repository variable NPM_TRUSTED_PUBLISHING=true
+    if: vars.NPM_TRUSTED_PUBLISHING == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24 # trusted publishing needs Node 22.14+ and npm 11.5.1+
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - uses: changesets/action@v1
+        with:
+          publish: pnpm release
+          title: Version packages
+          commit: Version packages
+          createGithubReleases: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
