@@ -23,10 +23,23 @@ function mount(basePath: string) {
   const shadow = host.attachShadow({ mode: 'open' });
 
   const style = document.createElement('style');
-  style.textContent = cropStyles + styles;
+  // The cropper declares its sizes and colours on `:root`, which a shadow root never matches.
+  style.textContent = cropStyles.replaceAll(':root', ':host') + styles;
   const layer = document.createElement('div');
   layer.className = 'layer';
   shadow.append(style, layer);
+
+  // Page shortcuts (like the Next.js dev tools') see the host element as the focused one, not our
+  // inputs, so they'd take keystrokes typed into a field. Keep those inside (Escape still closes).
+  for (const type of ['keydown', 'keypress', 'keyup']) {
+    shadow.addEventListener(type, (e) => {
+      const target = e.composedPath()[0];
+      const editable =
+        target instanceof HTMLElement &&
+        (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName));
+      if (editable && (e as KeyboardEvent).key !== 'Escape') e.stopPropagation();
+    });
+  }
 
   const syncTheme = () => (layer.dataset.theme = isDark() ? 'dark' : 'light');
   syncTheme();
