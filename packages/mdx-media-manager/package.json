@@ -1,6 +1,6 @@
 {
   "name": "mdx-media-manager",
-  "version": "0.1.0-beta.0",
+  "version": "0.1.0-beta.1",
   "description": "Add, replace and delete images in MDX docs straight from the rendered page, during development",
   "keywords": [
     "dev-tools",

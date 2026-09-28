@@ -1,5 +1,11 @@
 # mdx-media-manager
 
+## 0.1.0-beta.1
+
+### Patch Changes
+
+- b720665: Keep the image toolbar's "Confirm delete" button red while it's hovered. The toolbar's hover style overrode it, so the white label was invisible on a near-white background exactly when you went to click it.
+
 ## 0.1.0-beta.0
 
 ### Minor Changes
