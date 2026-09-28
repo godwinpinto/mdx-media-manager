@@ -26,3 +26,6 @@ coverage
 *.log
 *.pem
 .npmrc
+
+# local Claude Code settings (preview servers on this machine's free ports)
+.claude/

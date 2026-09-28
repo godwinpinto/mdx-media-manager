@@ -31,7 +31,9 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
 }
 .toolbar .missing-label code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; overflow: hidden; text-overflow: ellipsis; }
-.toolbar button.danger { background: var(--danger); color: #fff; }
+/* As specific as the hover rule above, so "Confirm delete" stays red (and readable) under the cursor */
+.toolbar button.danger, .toolbar button.danger:hover:not(:disabled) { background: var(--danger); color: #fff; }
+.toolbar button.danger:hover:not(:disabled) { background: #b91c1c; }
 
 .dock { position: fixed; right: 16px; bottom: 16px; display: flex; gap: 8px; pointer-events: none; }
 .toggle, .library-button {
