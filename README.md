@@ -28,6 +28,20 @@ pnpm --filter next-app dev             # Next.js        → http://localhost:300
 pnpm --filter tanstack-start-app dev   # TanStack Start → http://localhost:3001/docs
 ```
 
+### Testing the published package
+
+The apps use the local `packages/mdx-media-manager` source. To run them against the version on
+npm instead (what users install):
+
+```bash
+pnpm mdx-source npm                # the latest beta
+pnpm mdx-source npm 0.1.0-beta.0   # an exact version or tag
+pnpm mdx-source                    # which one each app uses
+pnpm mdx-source local              # back to the local source
+```
+
+Restart the dev servers after switching. Commit only in local mode: CI fails otherwise.
+
 Hover the docs content. See
 [packages/mdx-media-manager/README.md](packages/mdx-media-manager/README.md).
 

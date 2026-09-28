@@ -24,6 +24,7 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - run: pnpm mdx-source check # the apps must be committed on the local source
       - run: pnpm build
       - run: pnpm lint:format
       - run: pnpm lint
@@ -56,6 +57,8 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: ${{ matrix.node }}
+          # The pnpm cache would run pnpm, which needs Node 22.13+; this step only uses npm
+          package-manager-cache: false
       - name: Install into an empty project and load every entry point
         run: |
           mkdir "$RUNNER_TEMP/consumer" && cd "$RUNNER_TEMP/consumer"

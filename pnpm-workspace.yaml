@@ -6,6 +6,7 @@ allowBuilds:
   sharp: false
   '@parcel/watcher': false
 minimumReleaseAgeExclude:
+  - mdx-media-manager # our own package: `pnpm mdx-source npm` tests fresh releases
   - '@fumadocs/base-ui@16.15.15'
   - '@img/sharp-darwin-arm64@0.35.5'
   - '@img/sharp-darwin-x64@0.35.5'
