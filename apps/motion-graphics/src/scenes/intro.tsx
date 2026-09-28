@@ -1,13 +1,29 @@
-import { createDrawable, createMotionPath, spring, stagger } from 'animejs';
-import { maskIn, maskOut, type TL } from '../anim';
-import { Chars, Icon, Skel, Words } from '../ui/parts';
+import { createDrawable, spring, stagger } from 'animejs';
+import { type TL } from '../anim';
+import { BEAT, setMusic, sfx } from '../audio';
+import { Icon } from '../ui/parts';
 
-const prompt = 'Write the installation guide for our docs';
+/**
+ * The opening, one continuous shot:
+ * letters fly in and assemble → they dissolve into particles that form a doc page → the camera
+ * pulls back over a grid of pages → pushes into an empty image slot → "But the images? Still by
+ * hand." → the manual steps, one by one → implode → the name explodes out.
+ */
 
-/** Chores around the doc, clockwise from the top left. `x`/`y` are card centres on the stage. */
+/** Seeded random, so every render is identical */
+function rng(seed: number) {
+  return () => {
+    seed = (seed * 16807) % 2147483647;
+    return (seed - 1) / 2147483646;
+  };
+}
+
+const line1 = 'AI writes your docs';
+const line2 = 'in seconds.';
+/** The manual routine, one step at a time */
 const chores = [
-  { icon: Icon.camera, text: <>Take a screenshot</>, x: 300, y: 390, r: -3 },
-  { icon: Icon.crop, text: <>Crop it in another app</>, x: 1630, y: 390, r: 2.5 },
+  { icon: Icon.camera, text: <>Take a screenshot</> },
+  { icon: Icon.crop, text: <>Crop it in another app</> },
   {
     icon: Icon.pencil,
     text: (
@@ -15,476 +31,543 @@ const chores = [
         Rename <code>Screenshot 2026-09-27 at 10.42.17.png</code>
       </>
     ),
-    x: 1630,
-    y: 640,
-    r: -2,
   },
   {
     icon: Icon.folder,
     text: (
       <>
-        Move it into <code>public/images/docs/…</code>
+        Move it to <code>public/images/docs/…</code>
       </>
     ),
-    x: 1630,
-    y: 890,
-    r: 3,
   },
   {
     icon: Icon.keyboard,
     text: (
       <>
-        Type <code>![…](/images/docs/…)</code> by hand
+        Type <code>![…](/images/docs/…)</code> into the MDX
       </>
     ),
-    x: 300,
-    y: 890,
-    r: -2.5,
   },
-  { icon: Icon.refresh, text: <>Refresh and check</>, x: 300, y: 640, r: 2 },
+  { icon: Icon.refresh, text: <>Refresh the page to check it</> },
 ];
+const mark = 'mdx-media-manager';
 
-/** Skeleton lines that fly from the Generate button into the doc: [width, target x, target y] */
-const packets = [
-  [120, 1010, 430],
-  [220, 1060, 470],
-  [90, 1000, 540],
-  [180, 1100, 580],
-  [140, 1040, 650],
-  [240, 1120, 700],
-  [100, 1010, 760],
-  [200, 1080, 820],
-  [160, 1150, 880],
-  [110, 1030, 930],
-];
+/** 3×3 pages; the middle one is where the story happens */
+const grid = [-1, 0, 1].flatMap((gy) => [-1, 0, 1].map((gx) => ({ gx, gy })));
 
-/** Faint outlined shapes drifting behind everything: [kind, x, y, size] */
-const shapes: [string, number, number, number][] = [
-  ['ring', 120, 160, 90],
-  ['square', 1720, 130, 70],
-  ['plus', 1580, 960, 44],
-  ['ring', 820, 980, 50],
-  ['square', 90, 820, 56],
-  ['plus', 520, 120, 36],
-  ['ring', 1840, 560, 40],
-  ['square', 1180, 70, 38],
-];
-
-const deck = [
-  { id: '#deck-1', r: -9, x: -130, y: 40 },
-  { id: '#deck-2', r: 6, x: 90, y: -36 },
-  { id: '#deck-3', r: 13, x: 210, y: 56 },
-];
-
-function Placeholder({ id }: { id: string }) {
+function Letters({ text, className }: { text: string; className: string }) {
   return (
-    <div className="dl ph" id={id}>
-      <span className="ph-box">
-        <svg className="ants" width="100%" height="100%">
-          <rect x="2" y="2" width="99%" height="96%" rx="14" />
-        </svg>
-        {Icon.image}
-      </span>
+    <div className={className}>
+      {text.split(' ').map((word, w) => (
+        <span className="lw" key={w}>
+          {[...word].map((c, i) => (
+            <span className="lt" key={i}>
+              {c}
+            </span>
+          ))}
+        </span>
+      ))}
     </div>
   );
 }
 
+function Page({ main }: { main?: boolean }) {
+  return (
+    <>
+      <svg className="page-frame" width="820" height="780" viewBox="0 0 820 780">
+        <rect x="1.5" y="1.5" width="817" height="777" rx="22" />
+      </svg>
+      <div className="page-fill" />
+      <div className="page-tab">
+        <span className="tab-dot" />
+        <span className="tab-dot" />
+        <span className="tab-dot" />
+        <span className="bar tab-bar" />
+      </div>
+      <div className="page-body">
+        <span className="bar b-title" />
+        <span className="bar b-desc" />
+        <span className="bar b-h2" />
+        <span className="bar b-text" style={{ width: '96%' }} />
+        <span className="bar b-text" style={{ width: '90%' }} />
+        <span className="bar b-text" style={{ width: '58%' }} />
+        <div className={`slot ${main ? 'slot-main' : ''}`}>
+          <svg className="ants" width="100%" height="100%">
+            <rect x="2" y="2" width="99.4%" height="97.6%" rx="16" />
+          </svg>
+          <span className="slot-icon">{Icon.image}</span>
+        </div>
+        <span className="bar b-h2" style={{ width: '28%' }} />
+        <span className="code-block">
+          <span className="bar b-code" />
+        </span>
+        <span className="bar b-text" style={{ width: '92%' }} />
+        <span className="bar b-text" style={{ width: '70%' }} />
+      </div>
+    </>
+  );
+}
+
 export function Intro() {
+  const firstLine = line1.replace(/ /g, '').length;
   return (
     <section className="scene" id="intro">
-      <div id="intro-world">
-        <div className="shapes">
-          {shapes.map(([kind, x, y, size], i) => (
-            <span
-              key={i}
-              className={`shape ${kind}`}
-              style={{ left: x, top: y, width: size, height: size }}
-            />
+      <div id="world">
+        {grid.map(({ gx, gy }) => (
+          <div
+            key={`${gx},${gy}`}
+            className={`page ${gx === 0 && gy === 0 ? 'main' : 'other'}`}
+            style={{ left: 550 + gx * 900, top: 150 + gy * 860 }}
+          >
+            <Page main={gx === 0 && gy === 0} />
+          </div>
+        ))}
+        <div id="headline">
+          <Letters text={line1} className="hl hl-1" />
+          <Letters text={line2} className="hl hl-2" />
+        </div>
+        <div id="dots">
+          {[...(line1 + line2).replace(/ /g, '')].map((_, i) => (
+            <span key={i} className={`dot ${i >= firstLine ? 'accent' : ''}`} data-i={i} />
           ))}
         </div>
+      </div>
 
-        {/* The loop through the chores, behind the doc */}
-        <svg id="loop" width="1920" height="1080" viewBox="0 0 1920 1080">
+      <div id="question">
+        <Letters text="But the images?" className="q q-1" />
+        <Letters text="Still by hand." className="q q-2" />
+      </div>
+
+      <ol id="steps">
+        {chores.map((c, i) => (
+          <li key={i} className="card step" data-i={i}>
+            <span className="step-n">{i + 1}</span>
+            <span className="step-icon">{c.icon}</span>
+            <span className="step-text">{c.text}</span>
+            <span className="step-tick">{Icon.check}</span>
+            <span className="step-progress" />
+          </li>
+        ))}
+        <li className="steps-foot" id="steps-foot">
+          <span className="loop-icon">{Icon.refresh}</span>
+          <span className="w">Repeat</span> <span className="w">for</span>{' '}
+          <span className="w">every</span> <span className="w">image,</span>{' '}
+          <span className="w">on</span> <span className="w">every</span>{' '}
+          <span className="w">page.</span>
+        </li>
+      </ol>
+
+      <div id="burst">
+        <span id="flash" />
+        {Array.from({ length: 18 }, (_, i) => (
+          <span key={i} className="shard-arm" style={{ transform: `rotate(${i * 20}deg)` }}>
+            <i className="shard" />
+          </span>
+        ))}
+      </div>
+
+      <div id="brand">
+        <div className="mark" id="brand-mark">
+          {[...mark].map((c, i) => (
+            <span key={i} className={`mk ${c === '-' ? 'dash' : ''}`}>
+              {c}
+            </span>
+          ))}
+        </div>
+        <svg id="brand-line" width="820" height="30" viewBox="0 0 820 30">
           <path
-            d="M 390 390 H 1540 A 90 90 0 0 1 1630 480 V 800 A 90 90 0 0 1 1540 890 H 390 A 90 90 0 0 1 300 800 V 480 A 90 90 0 0 1 390 390 Z"
+            d="M6 18 C 200 4, 420 28, 814 10"
             fill="none"
-            stroke="#c7c9f5"
-            strokeWidth="4"
+            stroke="#4f46e5"
+            strokeWidth="6"
             strokeLinecap="round"
           />
         </svg>
-        <span id="loop-dot" />
-
-        <div id="prompt" className="card prompt">
-          <div className="prompt-head">
-            <span className="ai-dot" />
-            Prompt
-          </div>
-          <div className="prompt-text">
-            <Chars text={prompt} />
-          </div>
-          <div className="prompt-send">
-            Generate
-            <span className="burst">
-              {Array.from({ length: 12 }, (_, i) => (
-                <span key={i} className="ray" style={{ transform: `rotate(${i * 30}deg)` }}>
-                  <i />
-                </span>
-              ))}
+        <div className="brand-sub">
+          {'Add, replace and delete images'.split(' ').map((w, i) => (
+            <span className="wm" key={i}>
+              <span className="w">{w}</span>
             </span>
-          </div>
+          ))}
+          {'right on the page.'.split(' ').map((w, i) => (
+            <span className="wm" key={`a${i}`}>
+              <span className="w accent">{w}</span>
+            </span>
+          ))}
         </div>
-
-        {packets.map(([w], i) => (
-          <span key={i} className="packet" data-i={i} style={{ width: w }} />
-        ))}
-
-        {['nextjs.mdx', 'library.mdx', 's3.mdx'].map((name, i) => (
-          <div key={name} className="card doc deck" id={`deck-${i + 1}`}>
-            <div className="doc-tab">
-              {Icon.file}
-              <b>{name}</b>
-            </div>
-          </div>
-        ))}
-
-        <div id="doc" className="card doc">
-          <div className="doc-tab">
-            {Icon.file}
-            <b>installation.mdx</b>
-            <span>content/docs</span>
-          </div>
-          <div className="doc-body">
-            <div className="dl mono muted">---</div>
-            <div className="dl mono">
-              <span className="muted">title:</span>&nbsp;Installation
-            </div>
-            <div className="dl mono muted">---</div>
-            <div className="dl mono h">## Automatic setup</div>
-            <div className="dl">
-              <Skel w="92%" />
-            </div>
-            <div className="dl">
-              <Skel w="64%" />
-            </div>
-            <Placeholder id="ph1" />
-            <div className="dl code-line mono">npx mdx-media-manager init</div>
-            <div className="dl mono h">## Configure</div>
-            <div className="dl">
-              <Skel w="88%" />
-            </div>
-            <div className="dl">
-              <Skel w="95%" />
-            </div>
-            <Placeholder id="ph2" />
-            <div className="dl">
-              <Skel w="72%" />
-            </div>
-            <div className="dl">
-              <Skel w="40%" />
-            </div>
-          </div>
-        </div>
-
-        {chores.map((c, i) => (
-          <div className="card chore" key={i} data-i={i} style={{ left: c.x, top: c.y }}>
-            <span className="chore-n">{c.icon}</span>
-            <span className="chore-text">{c.text}</span>
-            <span className="chore-tick">{Icon.check}</span>
-          </div>
-        ))}
       </div>
-
-      <div id="hook-head">
-        <Words id="cap-hook" text="AI writes your docs *in seconds.*" className="title" mask />
-      </div>
-      <Words id="cap-problem" text="The images? *Still by hand.*" className="title" mask />
-      <Words id="chore-note" text="…for every image, on every page." className="subtitle" />
-      <span id="flash" />
     </section>
   );
 }
 
-/** ~13.5s: kinetic opening, the page writes itself, then the manual routine collapses */
+// ---------------------------------------------------------------------------------------------
+
+const $ = (s: string) => document.querySelector<HTMLElement>(s)!;
+const $$ = (s: string) => [...document.querySelectorAll<HTMLElement>(s)];
+
+/** Position of an element inside a container, ignoring transforms (layout at rest) */
+function pos(el: HTMLElement, root: HTMLElement) {
+  let x = 0;
+  let y = 0;
+  for (let n: HTMLElement | null = el; n && n !== root; n = n.offsetParent as HTMLElement | null) {
+    x += n.offsetLeft;
+    y += n.offsetTop;
+  }
+  const w = el.offsetWidth;
+  const h = el.offsetHeight;
+  return { x, y, w, h, cx: x + w / 2, cy: y + h / 2 };
+}
+
+/** Camera: how far to move the world so world point `p` lands on screen point `to` at `scale` */
+function aim(p: { x: number; y: number }, scale: number, to = { x: 960, y: 540 }) {
+  return { x: to.x - 960 - (p.x - 960) * scale, y: to.y - 540 - (p.y - 540) * scale };
+}
+
 export function buildIntro(tl: TL, t0: number) {
+  const r = rng(11);
+  const world = $('#world');
   const t = t0;
   tl.set('#intro', { opacity: 1 }, t);
 
-  // Background shapes drift the whole time
-  tl.add(
-    '#intro .shape',
-    { opacity: [0, 1], scale: [0.4, 1], duration: 900, delay: stagger(80) },
-    t,
-  );
-  tl.add(
-    '#intro .shape',
-    {
-      x: stagger([-40, 40]),
-      y: stagger([30, -30]),
-      rotate: stagger([-35, 35]),
-      duration: 12_500,
-      ease: 'inOutSine',
-    },
-    t + 300,
-  );
-
-  // 1. Kinetic headline: big in the middle, then it takes its place at the top
-  tl.set('#hook-head', { y: 330, scale: 1.4 }, t);
-  maskIn(tl, '#cap-hook', t + 150, 110);
-  tl.add(
-    '#hook-head',
-    { y: [330, 0], scale: [1.4, 1], duration: 900, ease: 'inOutCubic' },
-    t + 1500,
-  );
-
-  // 2. The prompt swings in and types itself
-  tl.add(
-    '#prompt',
-    {
-      opacity: [0, 1],
-      rotateY: [42, 12],
-      rotateX: [8, 3],
-      x: [-160, 0],
-      scale: [0.82, 1],
-      duration: 1100,
-      ease: 'outExpo',
-    },
-    t + 1750,
-  );
-  tl.add(
-    '#prompt .ch',
-    { opacity: [0, 1], y: [10, 0], duration: 180, ease: 'outCubic', delay: stagger(24) },
-    t + 2250,
-  );
-  const pressed = t + 2250 + prompt.length * 24 + 200;
-  tl.add(
-    '#prompt .prompt-send',
-    { scale: [1, 0.9, 1.04, 1], duration: 420, ease: 'inOutQuad' },
-    pressed,
-  );
-  tl.add(
-    '#prompt .ray i',
-    { opacity: [0, 1, 0], x: [18, 70], scaleX: [0.3, 1, 0.2], duration: 520, ease: 'outCubic' },
-    pressed + 120,
-  );
-
-  // 3. Lines fly from the button into the doc, which swings in from the side
-  const origin = { x: 330, y: 690 };
-  packets.forEach(([, x, y], i) => {
-    const el = `.packet[data-i="${i}"]`;
-    const at = pressed + 180 + i * 70;
-    tl.set(el, { x: origin.x, y: origin.y }, t);
+  // --- 1. Letters fly in from everywhere and assemble ------------------------------------------
+  const letters1 = $$('#headline .hl-1 .lt');
+  letters1.forEach((el) => {
     tl.add(
       el,
-      { opacity: [0, 1, 1, 0], scale: [0.4, 1, 1, 0.6], duration: 820, ease: 'linear' },
-      at,
-    );
-    tl.add(el, { x: [origin.x, x], duration: 820, ease: 'inOutQuad' }, at);
-    tl.add(el, { y: [origin.y, y], duration: 820, ease: 'outBack(1.4)' }, at);
-  });
-  tl.add(
-    '#doc',
-    {
-      opacity: [0, 1],
-      rotateY: [-42, -11],
-      rotateX: [14, 4],
-      x: [160, 0],
-      scale: [0.74, 1],
-      duration: 1200,
-      ease: 'outExpo',
-    },
-    pressed + 150,
-  );
-  tl.add(
-    '#doc .dl:not(.ph)',
-    {
-      opacity: [0, 1],
-      rotateX: [-90, 0],
-      duration: 600,
-      ease: 'outBack(1.2)',
-      delay: stagger(60),
-    },
-    pressed + 500,
-  );
-  tl.add(
-    '#doc .skel',
-    { scaleX: [0, 1], duration: 700, ease: 'outExpo', delay: stagger(60) },
-    pressed + 600,
-  );
-
-  // 4. More pages fan out behind it
-  const fanned = pressed + 1900;
-  deck.forEach((d, i) => {
-    tl.add(
-      d.id,
       {
         opacity: [0, 1],
-        rotate: [0, d.r],
-        x: [0, d.x],
-        y: [0, d.y],
-        rotateY: [-11, -11],
-        rotateX: [4, 4],
-        // Behind the doc: in 3D, depth decides what is in front, not the order in the page
-        z: [-90 * (i + 1), -90 * (i + 1)],
-        ease: spring({ bounce: 0.35, duration: 800 }),
+        x: [(r() - 0.5) * 1800, 0],
+        y: [(r() - 0.5) * 1000, 0],
+        z: [-1400 + r() * 1800, 0],
+        rotateX: [(r() - 0.5) * 360, 0],
+        rotateY: [(r() - 0.5) * 360, 0],
+        rotate: [(r() - 0.5) * 180, 0],
+        filter: ['blur(18px)', 'blur(0px)'],
+        duration: 1300,
+        ease: 'outExpo',
       },
-      fanned + i * 90,
+      t + 80 + r() * 520,
     );
   });
+  sfx.whoosh(t + 60, { length: 1.1, gain: 0.8 });
+  letters1.forEach(
+    (_, i) =>
+      i % 3 === 0 &&
+      sfx.tick(t + 500 + i * 35, { gain: 1.5, pan: (i / letters1.length) * 1.4 - 0.7 }),
+  );
 
-  // 5. Turn to the images: the rest leaves, the doc comes to the middle
-  const turn = fanned + 1500;
-  maskOut(tl, '#cap-hook', turn);
+  // "in seconds." slams in on the beat
+  const slam = t + 3 * BEAT;
   tl.add(
-    '#prompt',
+    '#headline .hl-2 .lt',
+    {
+      opacity: [0, 1],
+      scale: [3.2, 1],
+      z: [500, 0],
+      filter: ['blur(14px)', 'blur(0px)'],
+      duration: 520,
+      ease: 'outExpo',
+      delay: stagger(28),
+    },
+    slam,
+  );
+  tl.add(
+    '#world',
+    { x: [0, 14, -10, 6, -3, 0], y: [0, -8, 6, -3, 0], duration: 380, ease: 'linear' },
+    slam + 60,
+  );
+  sfx.thud(slam + 40, { gain: 1 });
+  setMusic({ kickFrom: slam });
+
+  // --- 2. The headline dissolves into dots, which fly and form a page ---------------------------
+  const dissolve = slam + 4 * BEAT;
+  // A slow push while the page forms
+  tl.add('#world', { scale: [1, 1.05], duration: dissolve + 2600 - t, ease: 'inOutSine' }, t);
+  const allLetters = $$('#headline .lt');
+  const bars = $$('#world .page.main .bar');
+  const targets = bars.map((b) => pos(b, world));
+  const perBar = Math.ceil(allLetters.length / targets.length);
+  allLetters.forEach((el, i) => {
+    const p = pos(el, world);
+    const dot = `#dots .dot[data-i="${i}"]`;
+    const bar = targets[i % targets.length]!;
+    const share = Math.floor(i / targets.length);
+    const tx = bar.x + 8 + (bar.w - 16) * (share / Math.max(1, perBar - 1)) * 0.9;
+    const ty = bar.cy;
+    const at = dissolve + 200 + (i % 9) * 40 + r() * 200;
+    tl.set(dot, { x: p.cx, y: p.cy }, t);
+    tl.add(
+      el,
+      { scale: [1, 0.2], opacity: [1, 0], duration: 260, ease: 'inQuad' },
+      dissolve + i * 14,
+    );
+    tl.add(dot, { opacity: [0, 1], scale: [2.2, 1], duration: 260 }, dissolve + i * 14);
+    tl.add(dot, { x: [p.cx, tx], duration: 900, ease: 'inOutQuart' }, at);
+    tl.add(dot, { y: [p.cy, ty], duration: 900, ease: 'inOutBack(1.6)' }, at);
+    tl.add(dot, { scale: [1, 0.4], opacity: [1, 0], duration: 250, ease: 'inQuad' }, at + 850);
+  });
+  sfx.whoosh(dissolve + 150, { length: 1.2, gain: 0.9 });
+
+  // The page draws itself around the arriving dots
+  const formed = dissolve + 1100;
+  tl.add('#world .page.main .page-frame rect', { opacity: [0, 1], duration: 1 }, dissolve + 300);
+  tl.add(
+    createDrawable('#world .page.main .page-frame rect'),
+    { draw: ['0 0', '0 1'], duration: 1100, ease: 'inOutCubic' },
+    dissolve + 300,
+  );
+  tl.add('#world .page.main .page-fill', { opacity: [0, 1], duration: 500 }, formed);
+  tl.add('#world .page.main .page-tab', { opacity: [0, 1], y: [-12, 0], duration: 500 }, formed);
+  tl.add(
+    '#world .page.main .bar',
+    { scaleX: [0, 1], duration: 650, ease: 'outExpo', delay: stagger(55) },
+    formed,
+  );
+  tl.add(
+    '#world .page.main .code-block',
+    { opacity: [0, 1], scale: [0.9, 1], duration: 500 },
+    formed + 300,
+  );
+  [0, 3, 6, 9].forEach((k) => sfx.pop(formed + k * 55, { gain: 0.6, pan: k / 12 - 0.4 }));
+
+  // --- 3. Pull back: pages everywhere ---------------------------------------------------------
+  const pull = formed + 1500;
+  tl.add('#world', { scale: [1.05, 0.36], duration: 1500, ease: 'inOutCubic' }, pull);
+  sfx.whoosh(pull, { length: 1.5, gain: 0.7 });
+  $$('#world .page.other').forEach((pg, i) => {
+    const at = pull + 350 + i * 70;
+    const frame = pg.querySelector<SVGRectElement>('.page-frame rect')!;
+    tl.add(frame, { opacity: [0, 1], duration: 1 }, at);
+    tl.add(createDrawable(frame), { draw: ['0 0', '0 1'], duration: 700, ease: 'inOutCubic' }, at);
+    tl.add(pg.querySelector('.page-fill')!, { opacity: [0, 1], duration: 400 }, at + 500);
+    tl.add(pg.querySelector('.page-tab')!, { opacity: [0, 1], duration: 400 }, at + 500);
+    tl.add(
+      pg.querySelectorAll('.bar'),
+      { scaleX: [0, 1], duration: 500, ease: 'outExpo', delay: stagger(30) },
+      at + 550,
+    );
+    tl.add(pg.querySelector('.code-block')!, { opacity: [0, 1], duration: 400 }, at + 700);
+  });
+  sfx.shimmer(pull + 900, { gain: 0.7 });
+
+  // Every page has an empty image slot
+  const slots = pull + 1800;
+  tl.add(
+    '#world .slot',
+    {
+      opacity: [0, 1],
+      scale: [0.85, 1],
+      ease: spring({ bounce: 0.4, duration: 600 }),
+      delay: stagger(60),
+    },
+    slots,
+  );
+  tl.add(
+    '#world .ants rect',
+    { strokeDashoffset: [0, -420], duration: 9000, ease: 'linear' },
+    slots,
+  );
+  [0, 2, 4, 6, 8].forEach((k) => sfx.pop(slots + k * 60, { gain: 0.35, pan: k / 8 - 0.5 }));
+
+  // --- 4. Push into the main page's empty slot ------------------------------------------------
+  const push = slots + 1000;
+  const slot = pos($('#world .slot-main'), world);
+  const zoom = 1.6;
+  const cam = aim({ x: slot.cx, y: slot.cy }, zoom, { x: 960, y: 800 });
+  tl.add(
+    '#world',
+    { scale: [0.36, zoom], x: [0, cam.x], y: [0, cam.y], duration: 1400, ease: 'inOutQuart' },
+    push,
+  );
+  tl.add('#world .page.other', { opacity: [1, 0], duration: 600, ease: 'inQuad' }, push + 400);
+  sfx.whoosh(push, { length: 1.3, gain: 0.8, pan: 0.2 });
+
+  // "But the images?" drops in with gravity
+  const ask = push + 1300;
+  $$('#question .q-1 .lt').forEach((el, i) => {
+    tl.add(
+      el,
+      {
+        opacity: [0, 1],
+        y: [-700, 0],
+        rotate: [(r() - 0.5) * 40, 0],
+        duration: 900,
+        ease: 'outBounce',
+      },
+      ask + i * 38,
+    );
+  });
+  [0, 4, 8].forEach((k) => sfx.thud(ask + 520 + k * 38, { gain: 0.45 }));
+
+  // "Still by hand." stamps down on the beat
+  const stamp = ask + 3 * BEAT;
+  tl.add(
+    '#question .q-2 .lt',
+    {
+      opacity: [0, 1],
+      scale: [2.6, 1],
+      filter: ['blur(10px)', 'blur(0px)'],
+      duration: 420,
+      ease: 'outExpo',
+      delay: stagger(22),
+    },
+    stamp,
+  );
+  tl.add(
+    '#world',
+    { x: [cam.x, cam.x + 12, cam.x - 9, cam.x + 4, cam.x], duration: 320, ease: 'linear' },
+    stamp + 80,
+  );
+  sfx.thud(stamp + 60, { gain: 1 });
+
+  // --- 5. The routine, step by step: each one lands, gets done, and is ticked off -------------
+  const steps0 = stamp + 2 * BEAT;
+  const STEP = 3 * BEAT;
+  tl.add(
+    '#world',
+    { opacity: [1, 0.2], filter: ['blur(0px)', 'blur(4px)'], duration: 700 },
+    steps0,
+  );
+  chores.forEach((_, i) => {
+    const row = `#steps .step[data-i="${i}"]`;
+    const at = steps0 + 200 + i * STEP;
+    tl.add(
+      row,
+      {
+        opacity: [0, 1],
+        x: [180, 0],
+        scale: [0.92, 1],
+        filter: ['blur(8px)', 'blur(0px)'],
+        duration: 650,
+        ease: 'outExpo',
+      },
+      at,
+    );
+    tl.add(
+      `${row} .step-n`,
+      { scale: [0.3, 1], rotate: [-90, 0], ease: spring({ bounce: 0.45, duration: 600 }) },
+      at + 60,
+    );
+    sfx.swish(at, { length: 0.4, gain: 0.4, pan: 0.5 });
+    // Doing it by hand takes a while
+    tl.add(
+      `${row} .step-progress`,
+      { scaleX: [0, 1], duration: STEP - 700, ease: 'inOutSine' },
+      at + 250,
+    );
+    tl.add(
+      `${row} .step-tick`,
+      { opacity: [0, 1], scale: [0.2, 1], ease: spring({ bounce: 0.5, duration: 500 }) },
+      at + STEP - 420,
+    );
+    tl.add(
+      `${row} .step-n`,
+      { backgroundColor: ['#18181b', '#059669'], duration: 250 },
+      at + STEP - 420,
+    );
+    tl.add(`${row} .step-progress`, { opacity: [1, 0], duration: 250 }, at + STEP - 300);
+    tl.add(row, { opacity: [1, 0.55], duration: 300 }, at + STEP - 100);
+    sfx.pop(at + STEP - 420, { gain: 0.5 });
+  });
+  const foot = steps0 + 200 + chores.length * STEP;
+  tl.add('#steps-foot', { opacity: [0, 1], duration: 1 }, foot);
+  tl.add(
+    '#steps-foot .w',
+    { opacity: [0, 1], y: [30, 0], duration: 600, ease: 'outExpo', delay: stagger(60) },
+    foot,
+  );
+  tl.add(
+    '#steps-foot .loop-icon',
+    { opacity: [0, 1], rotate: [-180, 360], duration: 1600, ease: 'outCubic' },
+    foot,
+  );
+  tl.add('#steps .step', { opacity: [0.55, 1], duration: 300 }, foot + 300);
+  sfx.riser(foot, { length: 1.8, gain: 0.8 });
+
+  // --- 6. Implode, then the name explodes out of the flash ------------------------------------
+  const implode = foot + 3 * BEAT;
+  tl.add(
+    '#steps',
+    { scale: [1, 0], filter: ['blur(0px)', 'blur(12px)'], duration: 450, ease: 'inBack(1.4)' },
+    implode,
+  );
+  tl.add(
+    '#question',
+    { scale: [1, 0], opacity: [1, 0], rotate: [0, -20], duration: 450, ease: 'inBack(1.4)' },
+    implode,
+  );
+  tl.add(
+    '#world',
+    { scale: [zoom, 0.05], opacity: [0.2, 0], duration: 500, ease: 'inBack(1.2)' },
+    implode,
+  );
+  const boom = implode + 480;
+  setMusic({ dropAt: boom });
+  sfx.impact(boom, { gain: 1 });
+  tl.add(
+    '#flash',
+    { opacity: [0.9, 0], scale: [0.05, 4.5], duration: 900, ease: 'outCubic' },
+    boom,
+  );
+  tl.add(
+    '#burst .shard',
+    { opacity: [1, 0], x: [30, 520], scaleX: [1.6, 0.2], duration: 800, ease: 'outExpo' },
+    boom,
+  );
+
+  const brand = $('#brand');
+  $$('#brand-mark .mk').forEach((el) => {
+    const p = pos(el, brand);
+    tl.add(
+      el,
+      {
+        opacity: [0, 1],
+        x: [960 - p.cx, 0],
+        y: [470 - p.cy, 0],
+        scale: [0, 1],
+        rotate: [(r() - 0.5) * 540, 0],
+        filter: ['blur(14px)', 'blur(0px)'],
+        duration: 1100,
+        ease: 'outExpo',
+      },
+      boom + 30 + r() * 120,
+    );
+  });
+  tl.add(
+    '#brand-mark .dash',
+    { color: ['#18181b', '#4f46e5'], scale: [1, 1.35, 1], duration: 500, ease: 'outBack(2)' },
+    boom + 900,
+  );
+  tl.add('#brand-line path', { opacity: [0, 1], duration: 1 }, boom + 800);
+  tl.add(
+    createDrawable('#brand-line path'),
+    { draw: ['0 0', '0 1'], duration: 800, ease: 'inOutCubic' },
+    boom + 800,
+  );
+  tl.add('#brand .w', { opacity: [0, 1], duration: 1 }, boom + 1100);
+  tl.add(
+    '#brand .w',
+    { y: ['110%', '0%'], duration: 800, ease: 'outExpo', delay: stagger(60) },
+    boom + 1100,
+  );
+  sfx.shimmer(boom + 900, { gain: 0.8 });
+
+  // Hold, then clear for the product
+  const out = boom + 3600;
+  tl.add(
+    '#brand',
     {
       opacity: [1, 0],
-      x: [0, -260],
-      rotateY: [12, 50],
+      scale: [1, 0.92],
+      y: [0, -40],
       filter: ['blur(0px)', 'blur(8px)'],
       duration: 500,
       ease: 'inQuad',
     },
-    turn,
+    out,
   );
-  deck.forEach((d, i) => {
-    tl.add(
-      d.id,
-      {
-        opacity: [1, 0],
-        rotate: [d.r, 0],
-        x: [d.x, 0],
-        y: [d.y, 0],
-        z: [-90 * (i + 1), -90 * (i + 1)],
-        duration: 450,
-        ease: 'inQuad',
-      },
-      turn,
-    );
-  });
-  tl.add(
-    '#doc',
-    {
-      x: [0, -410],
-      rotateY: [-11, 0],
-      rotateX: [4, 0],
-      scale: [1, 0.94],
-      duration: 1000,
-      ease: 'inOutCubic',
-    },
-    turn + 150,
-  );
-  maskIn(tl, '#cap-problem', turn + 600, 100);
-  tl.add(
-    '#doc .ph',
-    {
-      height: [0, 118],
-      marginBottom: [0, 14],
-      duration: 700,
-      ease: 'inOutCubic',
-      delay: stagger(220),
-    },
-    turn + 700,
-  );
-  tl.add(
-    '#doc .ph-box',
-    {
-      opacity: [0, 1],
-      scale: [0.7, 1],
-      ease: spring({ bounce: 0.45, duration: 600 }),
-      delay: stagger(220),
-    },
-    turn + 1000,
-  );
-  // Marching ants around the empty slots
-  tl.add(
-    '#doc .ants rect',
-    { strokeDashoffset: [0, -360], duration: 6000, ease: 'linear' },
-    turn + 1000,
-  );
-
-  // 6. The routine: chores fly in around the doc and a loop runs through them
-  const chores0 = turn + 1500;
-  tl.set('#loop', { opacity: 1 }, chores0);
-  tl.add(
-    createDrawable('#loop path'),
-    { draw: ['0 0', '0 1'], duration: 1400, ease: 'inOutCubic' },
-    chores0,
-  );
-  chores.forEach((c, i) => {
-    const el = `#intro .chore[data-i="${i}"]`;
-    const from = c.x < 960 ? -560 : 560;
-    const at = chores0 + 200 + i * 360;
-    tl.add(
-      el,
-      {
-        opacity: [0, 1],
-        x: [from, 0],
-        rotate: [from < 0 ? -28 : 28, c.r],
-        scale: [0.8, 1],
-        ease: spring({ bounce: 0.3, duration: 900 }),
-      },
-      at,
-    );
-    tl.add(
-      `${el} .chore-tick`,
-      {
-        opacity: [0, 1],
-        scale: [0.2, 1],
-        rotate: [-40, 0],
-        ease: spring({ bounce: 0.5, duration: 500 }),
-      },
-      at + 450,
-    );
-  });
-  // Idle breathing while the loop runs
-  tl.add(
-    '#intro .chore',
-    { y: [0, -7, 0, 5, 0], duration: 3200, ease: 'inOutSine', delay: stagger(140) },
-    chores0 + 2600,
-  );
-  tl.add('#loop-dot', { opacity: [0, 1], scale: [0, 1], duration: 300 }, chores0 + 900);
-  for (const lap of [0, 1]) {
-    tl.add(
-      '#loop-dot',
-      { ...createMotionPath('#loop path'), duration: 1900, ease: 'inOutSine' },
-      chores0 + 900 + lap * 1900,
-    );
-  }
-  tl.add('#chore-note', { opacity: [0, 1], duration: 1 }, chores0 + 2700);
-  tl.add(
-    '#chore-note .w',
-    { opacity: [0, 1], y: [20, 0], duration: 600, delay: stagger(50) },
-    chores0 + 2700,
-  );
-  tl.add(
-    '#doc .ph-box',
-    { rotate: [0, -5, 5, -3, 0], duration: 600, ease: 'inOutSine', delay: stagger(120) },
-    chores0 + 3300,
-  );
-
-  // 7. Everything collapses into the middle; the name bursts out of it next
-  const collapse = chores0 + 4500;
-  maskOut(tl, '#cap-problem', collapse);
-  tl.add('#chore-note', { opacity: [1, 0], duration: 250, ease: 'inQuad' }, collapse);
-  tl.add(
-    '#intro-world',
-    {
-      scale: [1, 0.04],
-      rotate: [0, 14],
-      filter: ['blur(0px)', 'blur(10px)'],
-      opacity: [1, 0],
-      duration: 750,
-      ease: 'inBack(1.3)',
-    },
-    collapse + 100,
-  );
-  tl.add(
-    '#flash',
-    { opacity: [0, 1, 0], scale: [0.1, 3.2], duration: 700, ease: 'outCubic' },
-    collapse + 700,
-  );
-  const end = collapse + 1000;
+  sfx.whoosh(out, { length: 0.7, gain: 0.6 });
+  const end = out + 500;
   tl.set('#intro', { opacity: 0 }, end);
   return end;
 }

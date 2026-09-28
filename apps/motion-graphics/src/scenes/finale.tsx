@@ -1,5 +1,6 @@
 import { createDrawable, spring, stagger } from 'animejs';
 import { enter, pop, type, wordsIn, type TL } from '../anim';
+import { sfx } from '../audio';
 import { Chars, Icon, Skel, Words } from '../ui/parts';
 import { Wordmark } from './reveal';
 
@@ -146,6 +147,9 @@ export function Outro() {
 export function buildStorage(tl: TL, t0: number) {
   let t = t0;
   tl.set('#storage', { opacity: 1 }, t);
+  sfx.whoosh(t, { length: 0.9, gain: 0.7 });
+  sfx.swish(t + 1800, { length: 0.7, gain: 0.4, pan: 0.5 });
+  sfx.swish(t + 3300, { length: 0.7, gain: 0.4, pan: 0.5 });
   wordsIn(tl, '#cap-storage', t);
   enter(tl, '#store-git', t + 300, { y: 50 });
   enter(tl, '#store-s3', t + 450, { y: 50 });
@@ -189,6 +193,9 @@ export function buildStorage(tl: TL, t0: number) {
 export function buildDev(tl: TL, t0: number) {
   let t = t0;
   tl.set('#dev', { opacity: 1 }, t);
+  sfx.whoosh(t, { length: 0.8, gain: 0.6 });
+  sfx.click(t + 2000, { gain: 1 });
+  sfx.swish(t + 2150, { length: 0.5, gain: 0.5 });
   wordsIn(tl, '#cap-dev', t);
   enter(tl, '.switch-row', t + 250, { y: 20 });
   enter(tl, '#mini', t + 400, { y: 40 });
@@ -228,6 +235,9 @@ export function buildDev(tl: TL, t0: number) {
 export function buildOutro(tl: TL, t0: number) {
   let t = t0;
   tl.set('#outro', { opacity: 1 }, t);
+  sfx.whoosh(t, { length: 0.8, gain: 0.6 });
+  sfx.thud(t + 450, { gain: 0.7 });
+  sfx.shimmer(t + 700, { gain: 0.7 });
   tl.add(
     '#outro-mark .ch',
     {

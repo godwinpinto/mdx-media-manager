@@ -1,5 +1,6 @@
 import { scrambleText, spring, stagger } from 'animejs';
 import { cursor, pop, type, wordsIn, wordsOut, type TL } from '../anim';
+import { sfx } from '../audio';
 import { Browser, Chars, Icon, Keycap, Odometer, Para, Shot, Skel, Words } from '../ui/parts';
 
 /**
@@ -354,6 +355,7 @@ export function buildApp(tl: TL, t0: number) {
   show(tl, 'odo-q', '82', 0);
 
   // Browser rises in with the page drawing itself
+  sfx.whoosh(t, { length: 1, gain: 0.8 });
   tl.add(
     '#browser',
     {
@@ -404,6 +406,7 @@ export function buildApp(tl: TL, t0: number) {
   t = c.click(t + 60);
 
   // The dialog grows out of the button
+  sfx.whoosh(t, { length: 0.6, gain: 0.6 });
   tl.add('#backdrop', { opacity: [0, 1], duration: 400, ease: 'outCubic' }, t);
   tl.add('#outline, #insert-pill', { opacity: [1, 0], duration: 200, ease: 'inQuad' }, t);
   tl.add('#dialog', { opacity: [0, 1], scale: [0.15, 1], duration: 750, ease: 'outExpo' }, t);
@@ -417,6 +420,9 @@ export function buildApp(tl: TL, t0: number) {
 
   // ⌘V: the screenshot flies in and lands in the cropper
   t = c.move(at('#dialog', 0.72, 0.28), t, 500);
+  sfx.click(t + 380, { gain: 0.8 });
+  sfx.swish(t + 520, { length: 0.6, gain: 0.7, pan: 0.5 });
+  sfx.thud(t + 1150, { gain: 0.5 });
   tl.add(
     '#keys-paste',
     { opacity: [0, 1], y: [30, 0], scale: [0.8, 1], ease: spring({ bounce: 0.35, duration: 500 }) },
@@ -512,6 +518,8 @@ export function buildApp(tl: TL, t0: number) {
   // Insert: the dialog folds into the page
   t = c.move(at('#insert-btn'), t, 550);
   t = c.click(t);
+  sfx.whoosh(t + 300, { length: 0.8, gain: 0.6 });
+  sfx.pop(t + 900, { gain: 0.7 });
   tl.add('#insert-btn', { scale: [1, 0.94, 1], duration: 260, ease: 'inOutQuad' }, t - 260);
   tl.add(
     '#dialog',
@@ -531,6 +539,7 @@ export function buildApp(tl: TL, t0: number) {
   t += 1500;
 
   // Beside it, the MDX file and the image file
+  sfx.whoosh(t, { length: 1, gain: 0.7, pan: 0.4 });
   tl.add('#toast', { opacity: [1, 0], duration: 250, ease: 'inQuad' }, t);
   c.hide(t);
   tl.add(
@@ -598,6 +607,7 @@ export function buildApp(tl: TL, t0: number) {
     { y: [0, 6, 0], duration: 260, delay: stagger(90), ease: 'inOutQuad' },
     t + 400,
   );
+  sfx.swish(t + 700, { length: 0.9, gain: 0.6, pan: -0.3 });
   tl.add(
     '#img-b',
     { clipPath: ['inset(0% 100% 0% 0%)', 'inset(0% 0% 0% 0%)'], duration: 900, ease: 'inOutCubic' },
@@ -639,6 +649,7 @@ export function buildApp(tl: TL, t0: number) {
   t += 1500;
 
   // Library
+  sfx.whoosh(t + 780, { length: 0.7, gain: 0.6 });
   tl.add('#toast', { opacity: [1, 0], duration: 250, ease: 'inQuad' }, t);
   caption(tl, '#cap-library', t + 100, '#cap-delete');
   t = c.move(at('#dock-library'), t, 700);
@@ -700,6 +711,7 @@ export function buildApp(tl: TL, t0: number) {
   t += 1500;
 
   // Out
+  sfx.whoosh(t + 100, { length: 0.6, gain: 0.5 });
   c.hide(t);
   wordsOut(tl, '#cap-library', t);
   tl.add(

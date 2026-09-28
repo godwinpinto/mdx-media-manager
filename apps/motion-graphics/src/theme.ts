@@ -4,7 +4,7 @@ export const WIDTH = 1920;
 export const HEIGHT = 1080;
 export const FPS = 60;
 /** Playback speed: the timeline is authored at 1×, the film plays it this much faster */
-export const SPEED = 1.2;
+export const SPEED = 2;
 
 export const color = {
   bg: '#f7f7f8',

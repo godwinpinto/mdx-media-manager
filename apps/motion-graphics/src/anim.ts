@@ -1,4 +1,5 @@
 import { createTimeline, spring, stagger, type Timeline } from 'animejs';
+import { sfx } from './audio';
 import { dur, ease } from './theme';
 
 export type TL = Timeline;
@@ -15,6 +16,7 @@ export function enter(
   at: number,
   o: { y?: number; scale?: number; each?: number; duration?: number } = {},
 ) {
+  sfx.swish(at, { gain: 0.22, length: 0.4 });
   tl.add(
     targets,
     {
@@ -44,6 +46,7 @@ export function exit(tl: TL, targets: string, at: number, o: { y?: number; each?
 
 /** Springy scale-in for chips, buttons and badges */
 export function pop(tl: TL, targets: string, at: number, o: { each?: number; from?: number } = {}) {
+  sfx.pop(at, { gain: 0.5 });
   tl.add(
     targets,
     {
@@ -58,6 +61,10 @@ export function pop(tl: TL, targets: string, at: number, o: { each?: number; fro
 
 /** Reveal pre-split characters (`.ch` spans) one by one, like typing */
 export function type(tl: TL, container: string, at: number, perChar = dur.char) {
+  // A soft key tick every other character
+  const chars = document.querySelectorAll(`${container} .ch`).length;
+  for (let c = 0; c < chars; c += 2)
+    sfx.tick(at + c * perChar, { gain: 0.55, pan: (c % 6) / 6 - 0.4 });
   tl.add(
     `${container} .ch`,
     { opacity: [0, 1], duration: 1, ease: 'linear', delay: stagger(perChar) },
@@ -67,6 +74,7 @@ export function type(tl: TL, container: string, at: number, perChar = dur.char) 
 
 /** Words of a kinetic caption rise in, blurred to sharp */
 export function wordsIn(tl: TL, container: string, at: number) {
+  sfx.swish(at, { gain: 0.3, length: 0.45 });
   tl.add(container, { opacity: [0, 1], duration: 1 }, at);
   tl.add(
     `${container} .w`,
@@ -122,6 +130,7 @@ export function cursor(tl: TL, start: { x: number; y: number }) {
       return at + duration;
     },
     click(at: number) {
+      sfx.click(at);
       tl.add('#cursor .arrow', { scale: [1, 0.82, 1], duration: 260, ease: 'inOutQuad' }, at);
       tl.set('#ripple', { x: pos.x, y: pos.y }, at);
       tl.add(
@@ -136,6 +145,7 @@ export function cursor(tl: TL, start: { x: number; y: number }) {
 
 /** Words slide up from behind their masks (needs `<Words mask>`) */
 export function maskIn(tl: TL, container: string, at: number, each = 90) {
+  sfx.whoosh(at, { gain: 0.45, length: 0.6 });
   tl.add(container, { opacity: [0, 1], duration: 1 }, at);
   tl.add(`${container} .w`, { opacity: [0, 1], duration: 1, delay: stagger(each) }, at);
   tl.add(
